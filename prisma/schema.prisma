@@ -1,0 +1,116 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts   Account[]
+  sessions   Session[]
+  mediaItems MediaItem[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model MediaItem {
+  id              String      @id @default(cuid())
+  userId          String
+  title           String
+  type            MediaType
+  status          MediaStatus @default(PLANNED)
+  
+  // TMDB / External IDs
+  tmdbId          String?
+  imdbId          String?
+  
+  // Media metadata
+  posterUrl       String?
+  backdropUrl     String?
+  genres          String[]
+  releaseYear     Int?
+  overview        String?     @db.Text
+  tmdbRating      Float?
+  
+  // Time tracking
+  runtime         Int?        // minutes (movies/episodes)
+  episodeCount    Int?        // anime/TV shows
+  episodeDuration Int?        // minutes per episode
+  playtimeHours   Float?      // games (manual)
+  totalTimeMinutes Int?        // computed: episodes*duration or runtime or playtime*60
+  
+  // User data
+  userRating      Int?        // 1-10
+  notes           String?     @db.Text
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, tmdbId])
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+}
+
+enum MediaType {
+  ANIME
+  MOVIE
+  TVSHOW
+  GAME
+}
+
+enum MediaStatus {
+  WATCHING
+  COMPLETED
+  PLANNED
+  DROPPED
+}
