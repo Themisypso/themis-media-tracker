@@ -7,85 +7,106 @@ import { Navbar } from '@/components/Navbar'
 
 export const revalidate = 3600 // Cache for 1 hour, or make dynamic
 
-export default async function LandingPage() {
-    // 1. Fetch Trending (most saved items)
-    const trendingGroups = await prisma.mediaItem.groupBy({
-        by: ['tmdbId'],
-        _count: { tmdbId: true },
-        orderBy: { _count: { tmdbId: 'desc' } },
-        where: { tmdbId: { not: null } },
-        take: 6,
-    })
-    const trendingIds = trendingGroups.map(g => g.tmdbId).filter(Boolean) as string[]
-    let trendingItems: any[] = []
-    if (trendingIds.length > 0) {
-        const raw = await prisma.mediaItem.findMany({
-            where: { tmdbId: { in: trendingIds } }
-        })
-        for (const id of trendingIds) {
-            const item = raw.find(r => r.tmdbId === id)
-            if (item) trendingItems.push(item)
+import { unstable_cache } from 'next/cache'
+
+const getCachedLandingData = unstable_cache(
+    async () => {
+        // 1. Fire independent initial queries in parallel
+        const [trendingGroups, rawNewest, rawTop] = await Promise.all([
+            prisma.mediaItem.groupBy({
+                by: ['tmdbId'],
+                _count: { tmdbId: true },
+                orderBy: { _count: { tmdbId: 'desc' } },
+                where: { tmdbId: { not: null } },
+                take: 8,
+            }),
+            prisma.mediaItem.findMany({
+                take: 40,
+                where: { tmdbId: { not: null } },
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, tmdbId: true, title: true, type: true, posterUrl: true, status: true, totalTimeMinutes: true }
+            }),
+            prisma.mediaItem.findMany({
+                take: 40,
+                where: { tmdbId: { not: null }, tmdbRating: { gte: 8 } },
+                orderBy: { tmdbRating: 'desc' },
+                select: { id: true, tmdbId: true, title: true, type: true, posterUrl: true, status: true, totalTimeMinutes: true }
+            })
+        ])
+
+        // 2. Filter newest and top items to get 8 distinct items
+        const newestItems: any[] = []
+        const seenNew = new Set()
+        for (const item of rawNewest) {
+            if (!seenNew.has(item.tmdbId)) {
+                seenNew.add(item.tmdbId)
+                newestItems.push(item)
+                if (newestItems.length === 8) break
+            }
         }
-    }
 
-    // 2. Fetch Newest items
-    const rawNewest = await prisma.mediaItem.findMany({
-        take: 30,
-        where: { tmdbId: { not: null } },
-        orderBy: { createdAt: 'desc' }
-    })
-    const newestItems: any[] = []
-    const seenNew = new Set()
-    for (const item of rawNewest) {
-        if (!seenNew.has(item.tmdbId)) {
-            seenNew.add(item.tmdbId)
-            newestItems.push(item)
-            if (newestItems.length === 6) break
+        const topItems: any[] = []
+        const seenTop = new Set()
+        for (const item of rawTop) {
+            if (!seenTop.has(item.tmdbId)) {
+                seenTop.add(item.tmdbId)
+                topItems.push(item)
+                if (topItems.length === 8) break
+            }
         }
-    }
 
-    // 3. Fetch Top Rated (Global Average might be complex, so let's pick high rating items)
-    const rawTop = await prisma.mediaItem.findMany({
-        take: 30,
-        where: { tmdbId: { not: null }, tmdbRating: { gte: 8 } },
-        orderBy: { tmdbRating: 'desc' }
-    })
-    const topItems: any[] = []
-    const seenTop = new Set()
-    for (const item of rawTop) {
-        if (!seenTop.has(item.tmdbId)) {
-            seenTop.add(item.tmdbId)
-            topItems.push(item)
-            if (topItems.length === 6) break
-        }
-    }
+        // 3. Fetch trending item details based on the grouped IDs
+        const trendingIds = trendingGroups.map(g => g.tmdbId).filter(Boolean) as string[]
+        let trendingItems: any[] = []
 
-    const allIds = [
-        ...trendingItems.map(i => i.tmdbId),
-        ...newestItems.map(i => i.tmdbId),
-        ...topItems.map(i => i.tmdbId)
-    ].filter(Boolean) as string[]
+        if (trendingIds.length > 0) {
+            const rawTrending = await prisma.mediaItem.findMany({
+                where: { tmdbId: { in: trendingIds } },
+                select: { id: true, tmdbId: true, title: true, type: true, posterUrl: true, status: true, totalTimeMinutes: true, userRating: true }
+            })
 
-    // Fetch average userRatings for all items shown on the landing page
-    if (allIds.length > 0) {
-        const ratingAggs = await prisma.mediaItem.groupBy({
-            by: ['tmdbId'],
-            _avg: { userRating: true },
-            where: { tmdbId: { in: allIds }, userRating: { not: null } }
-        })
-        const ratingMap = new Map(ratingAggs.map(r => [r.tmdbId, r._avg.userRating ? Math.round(r._avg.userRating * 10) / 10 : null]))
-
-        // Override the single row's userRating with the platform average
-        for (const list of [trendingItems, newestItems, topItems]) {
-            for (const item of list) {
-                if (item.tmdbId && ratingMap.has(item.tmdbId)) {
-                    item.userRating = ratingMap.get(item.tmdbId)
-                } else {
-                    item.userRating = null // Don't show a random user's rating, only averages
+            // Match them back to the ordered IDs, ensuring distinctness
+            const seenTrend = new Set()
+            for (const id of trendingIds) {
+                const item = rawTrending.find(r => r.tmdbId === id && !seenTrend.has(r.tmdbId))
+                if (item) {
+                    seenTrend.add(item.tmdbId)
+                    trendingItems.push(item)
                 }
             }
         }
-    }
+
+        // 4. Batch fetch average ratings for all displayed items in ONE query
+        const allIds = [
+            ...trendingItems.map(i => i.tmdbId),
+            ...newestItems.map(i => i.tmdbId),
+            ...topItems.map(i => i.tmdbId)
+        ].filter(Boolean) as string[]
+
+        if (allIds.length > 0) {
+            const ratingAggs = await prisma.mediaItem.groupBy({
+                by: ['tmdbId'],
+                _avg: { userRating: true },
+                where: { tmdbId: { in: allIds }, userRating: { not: null } }
+            })
+            const ratingMap = new Map(ratingAggs.map(r => [r.tmdbId, r._avg.userRating ? Math.round(r._avg.userRating * 10) / 10 : null]))
+
+            // Manually inject the computed average rating back into the items
+            for (const list of [trendingItems, newestItems, topItems]) {
+                for (const item of list) {
+                    item.userRating = item.tmdbId ? (ratingMap.get(item.tmdbId) || null) : null
+                }
+            }
+        }
+
+        return { trendingItems, newestItems, topItems }
+    },
+    ['landing-page-data'],
+    { revalidate: 3600, tags: ['landing-data'] }
+)
+
+export default async function LandingPage() {
+    const { trendingItems, newestItems, topItems } = await getCachedLandingData()
 
     return (
         <main className="min-h-screen cyber-bg">
