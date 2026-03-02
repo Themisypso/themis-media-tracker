@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Save, Loader2, Globe, Lock, User, Link as LinkIcon, Image as ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -12,6 +13,8 @@ interface Props {
 
 export function SettingsForm({ initialSettings, user }: Props) {
     const router = useRouter()
+    const { update } = useSession()
+
     const [saving, setSaving] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [avatar, setAvatar] = useState(user?.image || null)
@@ -45,6 +48,8 @@ export function SettingsForm({ initialSettings, user }: Props) {
             if (!res.ok) throw new Error(json.error)
 
             setAvatar(json.url)
+            await update({ image: json.url })
+
             toast.success('Avatar updated successfully!')
             router.refresh()
         } catch (err: any) {
@@ -72,6 +77,8 @@ export function SettingsForm({ initialSettings, user }: Props) {
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)
+
+            await update({ name: formData.name })
 
             toast.success('Settings saved successfully!')
             router.refresh()
