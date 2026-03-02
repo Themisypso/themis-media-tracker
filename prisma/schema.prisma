@@ -25,6 +25,14 @@ model User {
   accounts   Account[]
   sessions   Session[]
   mediaItems MediaItem[]
+
+  // New Relational Links
+  settings         UserSettings?
+  followers        Follows[]     @relation("followers")
+  following        Follows[]     @relation("following")
+  activities       Activity[]
+  quotes           Quote[]
+  submittedReports Report[]      @relation("ReportedBy")
 }
 
 model Account {
@@ -63,40 +71,46 @@ model VerificationToken {
 }
 
 model MediaItem {
-  id              String      @id @default(cuid())
-  userId          String
-  title           String
-  type            MediaType
-  status          MediaStatus @default(PLANNED)
-  
+  id     String      @id @default(cuid())
+  userId String
+  title  String
+  type   MediaType
+  status MediaStatus @default(PLANNED)
+
   // TMDB / External IDs
-  tmdbId          String?
-  imdbId          String?
-  
+  tmdbId String?
+  imdbId String?
+
   // Media metadata
-  posterUrl       String?
-  backdropUrl     String?
-  genres          String[]
-  releaseYear     Int?
-  overview        String?     @db.Text
-  tmdbRating      Float?
-  
+  posterUrl   String?
+  backdropUrl String?
+  genres      String[]
+  releaseYear Int?
+  overview    String?  @db.Text
+  tmdbRating  Float?
+
   // Time tracking
-  runtime         Int?        // minutes (movies/episodes)
-  episodeCount    Int?        // anime/TV shows
-  episodeDuration Int?        // minutes per episode
-  playtimeHours   Float?      // games (manual)
-  totalTimeMinutes Int?        // computed: episodes*duration or runtime or playtime*60
-  
+  runtime          Int? // minutes (movies/episodes)
+  episodeCount     Int? // anime/TV shows
+  episodeDuration  Int? // minutes per episode
+  playtimeHours    Float? // games (manual)
+  totalTimeMinutes Int? // computed: episodes*duration or runtime or playtime*60
+
   // User data
-  userRating      Int?        // 1-10
-  notes           String?     @db.Text
-  
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userRating Int? // 1-10
+  notes      String? @db.Text
+
+  // Progress tracking
+  progress  Int? // Current minute, page, or episode
+  pageCount Int? // For books
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities Activity[]
+  quotes     Quote[]
+
   @@unique([userId, tmdbId])
   @@index([userId])
   @@index([type])
@@ -108,6 +122,7 @@ enum MediaType {
   MOVIE
   TVSHOW
   GAME
+  BOOK
 }
 
 enum MediaStatus {
@@ -119,5 +134,122 @@ enum MediaStatus {
 
 enum Role {
   USER
+  MODERATOR
   ADMIN
+  SUPERADMIN
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  CYBERPUNK
+  RETROWAVE
+}
+
+enum ActivityType {
+  REVIEW
+  PROGRESS_UPDATE
+  STATUS_CHANGE
+  QUOTE
+}
+
+enum ReportTargetType {
+  USER
+  MEDIA_ITEM
+  QUOTE
+  ACTIVITY
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bio       String? @db.Text
+  website   String?
+  twitter   String?
+  instagram String?
+
+  isPublic     Boolean @default(true)
+  hideRatings  Boolean @default(false)
+  hideActivity Boolean @default(false)
+
+  language String @default("EN") // TR, EN
+  theme    Theme  @default(DARK)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Follows {
+  follower    User     @relation("following", fields: [followerId], references: [id], onDelete: Cascade)
+  followerId  String
+  following   User     @relation("followers", fields: [followingId], references: [id], onDelete: Cascade)
+  followingId String
+  createdAt   DateTime @default(now())
+
+  @@id([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model Activity {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type ActivityType
+
+  mediaId String? // Reference context
+  media   MediaItem? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  content   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Quote {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  mediaId String
+  media   MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  content   String  @db.Text
+  reference String? // e.g., "Page 42" or "1:24:00"
+  mediaUrl  String? // Cloudinary/Supabase media string for attached image/video
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([mediaId])
+}
+
+model Report {
+  id         String @id @default(cuid())
+  reporterId String
+  reporter   User   @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  targetId   String
+  targetType ReportTargetType
+
+  reason String       @db.Text
+  status ReportStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([targetType, targetId])
 }
