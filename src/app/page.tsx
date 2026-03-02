@@ -4,6 +4,8 @@ import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { prisma } from '@/lib/prisma'
 import { PosterCard } from '@/components/PosterCard'
 import { Navbar } from '@/components/Navbar'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export const revalidate = 3600 // Cache for 1 hour, or make dynamic
 
@@ -106,6 +108,7 @@ const getCachedLandingData = unstable_cache(
 )
 
 export default async function LandingPage() {
+    const session = await getServerSession(authOptions)
     const { trendingItems, newestItems, topItems } = await getCachedLandingData()
 
     return (
@@ -131,12 +134,25 @@ export default async function LandingPage() {
                     Track anime, movies, TV shows, and games in one place. Auto-filled from TMDB. Visualize your lifetime media consumption with beautiful analytics.
                 </p>
                 <div className="flex items-center justify-center gap-4 flex-wrap">
-                    <Link href="/auth/register" className="btn-primary flex items-center gap-2 text-base px-8 py-3.5">
-                        Start Tracking Free <ArrowRight size={18} />
-                    </Link>
-                    <Link href="/auth/login" className="btn-cyber flex items-center gap-2 text-base px-8 py-3.5">
-                        Sign In
-                    </Link>
+                    {session ? (
+                        <>
+                            <Link href="/dashboard" className="btn-primary flex items-center gap-2 text-base px-8 py-3.5">
+                                Go to Dashboard <ArrowRight size={18} />
+                            </Link>
+                            <Link href="/explore" className="btn-cyber flex items-center gap-2 text-base px-8 py-3.5">
+                                Explore Media
+                            </Link>
+                        </>
+                    ) : (
+                        <>
+                            <Link href="/auth/register" className="btn-primary flex items-center gap-2 text-base px-8 py-3.5">
+                                Start Tracking Free <ArrowRight size={18} />
+                            </Link>
+                            <Link href="/auth/login" className="btn-cyber flex items-center gap-2 text-base px-8 py-3.5">
+                                Sign In
+                            </Link>
+                        </>
+                    )}
                 </div>
 
                 {/* Stats preview */}
@@ -208,11 +224,23 @@ export default async function LandingPage() {
             {/* CTA */}
             <section className="text-center px-6 py-20 border-t border-border mt-12 bg-bg-secondary">
                 <div className="max-w-2xl mx-auto glass-card p-12" style={{ boxShadow: '0 0 60px rgba(0,212,255,0.05)' }}>
-                    <h2 className="text-3xl font-display font-bold mb-4 text-text-primary">Ready to start tracking?</h2>
-                    <p className="text-text-secondary mb-8">Create your free account and track anime, movies, TV shows, and games.</p>
-                    <Link href="/auth/register" className="btn-primary text-base px-10 py-4 inline-flex items-center gap-2">
-                        Create Free Account <ArrowRight size={18} />
-                    </Link>
+                    {session ? (
+                        <>
+                            <h2 className="text-3xl font-display font-bold mb-4 text-text-primary">Welcome back.</h2>
+                            <p className="text-text-secondary mb-8">Continue logging your media journey and check out your latest stats.</p>
+                            <Link href="/dashboard" className="btn-primary text-base px-10 py-4 inline-flex items-center gap-2">
+                                Enter Dashboard <ArrowRight size={18} />
+                            </Link>
+                        </>
+                    ) : (
+                        <>
+                            <h2 className="text-3xl font-display font-bold mb-4 text-text-primary">Ready to start tracking?</h2>
+                            <p className="text-text-secondary mb-8">Create your free account and track anime, movies, TV shows, and games.</p>
+                            <Link href="/auth/register" className="btn-primary text-base px-10 py-4 inline-flex items-center gap-2">
+                                Create Free Account <ArrowRight size={18} />
+                            </Link>
+                        </>
+                    )}
                 </div>
             </section>
 
