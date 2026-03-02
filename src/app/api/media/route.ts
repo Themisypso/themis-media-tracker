@@ -54,7 +54,18 @@ export async function GET(req: Request) {
             ...(type ? { type: type as any } : {}),
             ...(status ? { status: status as any } : {}),
         },
-        orderBy: { createdAt: 'desc' },
+        select: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+            posterUrl: true,
+            userRating: true,
+            totalTimeMinutes: true,
+            tmdbId: true,
+            updatedAt: true
+        },
+        orderBy: { updatedAt: 'desc' },
     })
 
     return NextResponse.json({ items })
