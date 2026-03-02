@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 :root {
+  /* Default: Dark Theme */
   --bg-primary: #080c14;
   --bg-secondary: #0d1117;
   --bg-card: #111827;
@@ -15,6 +16,45 @@
   --border: #1e2a3a;
   --text-primary: #e8edf5;
   --text-secondary: #8899aa;
+}
+
+[data-theme='light'] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #e2e8f0;
+  --bg-card: #ffffff;
+  --accent-cyan: #0077b6;
+  --accent-purple: #5e17eb;
+  --accent-pink: #d81b60;
+  --accent-green: #008f5d;
+  --border: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+}
+
+[data-theme='cyberpunk'] {
+  --bg-primary: #fcee0a;
+  --bg-secondary: #dfd306;
+  --bg-card: #000000;
+  --accent-cyan: #00f0ff;
+  --accent-purple: #d112ff;
+  --accent-pink: #ff0055;
+  --accent-green: #00ff9d;
+  --border: #00f0ff;
+  --text-primary: #000000;
+  --text-secondary: #222222;
+}
+
+[data-theme='retrowave'] {
+  --bg-primary: #2a0a4a;
+  --bg-secondary: #1a0530;
+  --bg-card: #3b1464;
+  --accent-cyan: #0ff0fc;
+  --accent-purple: #b900ff;
+  --accent-pink: #ff007f;
+  --accent-green: #00ffcc;
+  --border: #ff007f;
+  --text-primary: #ffffff;
+  --text-secondary: #ffb3d9;
 }
 
 * {
