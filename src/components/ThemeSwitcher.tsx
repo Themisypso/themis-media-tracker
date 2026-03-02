@@ -1,57 +1,61 @@
 'use client'
 
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { Moon, Sun } from 'lucide-react'
+
+const themes = [
+    { id: 'light', label: 'Light' },
+    { id: 'dark', label: 'Dark' },
+    { id: 'cyberpunk', label: 'Cyberpunk' },
+    { id: 'retrowave', label: 'Retrowave' },
+]
 
 export function ThemeSwitcher() {
     const [mounted, setMounted] = useState(false)
+    const [open, setOpen] = useState(false)
     const { theme, setTheme } = useTheme()
+    const dropdownRef = useRef<HTMLDivElement>(null)
 
     // Ensure component only renders after hydration to prevent hydration mismatch
-    useEffect(() => setMounted(true), [])
+    useEffect(() => {
+        setMounted(true)
+        function handleClick(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClick)
+        return () => document.removeEventListener('mousedown', handleClick)
+    }, [])
 
     if (!mounted) {
-        return <div className="h-10 w-[180px] bg-bg-card rounded-lg animate-pulse" />
+        return <div className="w-9 h-9 bg-bg-card border border-border rounded-lg animate-pulse" />
     }
 
     return (
-        <div className="flex bg-bg-card border border-border rounded-lg p-1 gap-1">
+        <div className="relative" ref={dropdownRef}>
             <button
-                onClick={() => setTheme('light')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${theme === 'light'
-                        ? 'bg-text-primary text-bg-primary shadow-sm'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
+                onClick={() => setOpen(!open)}
+                className="w-9 h-9 flex items-center justify-center rounded-lg bg-bg-card border border-border hover:border-border-bright transition-all text-text-secondary hover:text-text-primary"
+                aria-label="Toggle theme"
             >
-                Light
+                {theme === 'light' ? <Sun size={18} /> : theme === 'cyberpunk' ? <Moon className="text-accent-cyan" size={18} /> : theme === 'retrowave' ? <Moon className="text-accent-pink" size={18} /> : <Moon size={18} />}
             </button>
-            <button
-                onClick={() => setTheme('dark')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${theme === 'dark'
-                        ? 'bg-text-primary text-bg-primary shadow-sm'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
-            >
-                Dark
-            </button>
-            <button
-                onClick={() => setTheme('cyberpunk')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${theme === 'cyberpunk'
-                        ? 'bg-accent-cyan text-black shadow-[0_0_10px_rgba(0,212,255,0.4)]'
-                        : 'text-text-secondary hover:text-accent-cyan'
-                    }`}
-            >
-                Cyber
-            </button>
-            <button
-                onClick={() => setTheme('retrowave')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${theme === 'retrowave'
-                        ? 'bg-accent-pink text-white shadow-[0_0_10px_rgba(255,45,122,0.4)]'
-                        : 'text-text-secondary hover:text-accent-pink'
-                    }`}
-            >
-                Retro
-            </button>
+
+            {open && (
+                <div className="absolute right-0 top-full mt-2 w-36 glass-card py-1 animate-slide-down flex flex-col shadow-card z-50 overflow-hidden">
+                    {themes.map(t => (
+                        <button
+                            key={t.id}
+                            onClick={() => { setTheme(t.id); setOpen(false) }}
+                            className={`px-4 py-2 text-sm text-left transition-colors ${theme === t.id ? 'text-accent-cyan bg-bg-hover font-medium' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover/50'}`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

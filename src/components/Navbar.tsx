@@ -32,8 +32,6 @@ export function Navbar() {
         return () => document.removeEventListener('mousedown', handleClick)
     }, [])
 
-    if (!session) return null
-
     return (
         <>
             <nav className="fixed top-0 left-0 right-0 z-40 border-b border-border bg-bg-primary/95 backdrop-blur-md">
@@ -51,7 +49,7 @@ export function Navbar() {
 
                         {/* Desktop nav links */}
                         <div className="hidden md:flex items-center gap-1">
-                            {navLinks.map(({ href, label, icon: Icon }) => (
+                            {session && navLinks.map(({ href, label, icon: Icon }) => (
                                 <Link key={href} href={href}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${pathname === href
                                         ? 'text-accent-cyan bg-accent-cyan/10'
@@ -70,39 +68,45 @@ export function Navbar() {
                                 <ThemeSwitcher />
                             </div>
 
-                            {/* User dropdown */}
-                            <div className="relative" ref={dropdownRef}>
-                                <button
-                                    onClick={() => setUserDropdown(p => !p)}
-                                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-card border border-border hover:border-border-bright transition-all"
-                                >
-                                    {session.user?.image ? (
-                                        <img src={session.user.image} alt="avatar" className="w-6 h-6 rounded-full object-cover" />
-                                    ) : (
-                                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gradient-to-br from-accent-cyan to-accent-purple text-white">
-                                            {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                            {/* User dropdown or Login */}
+                            {session ? (
+                                <div className="relative" ref={dropdownRef}>
+                                    <button
+                                        onClick={() => setUserDropdown(p => !p)}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-card border border-border hover:border-border-bright transition-all"
+                                    >
+                                        {session.user?.image ? (
+                                            <img src={session.user.image} alt="avatar" className="w-6 h-6 rounded-full object-cover" />
+                                        ) : (
+                                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gradient-to-br from-accent-cyan to-accent-purple text-white">
+                                                {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                                            </div>
+                                        )}
+                                        <span className="text-sm text-text-primary hidden sm:block max-w-[120px] truncate">{session.user?.name || session.user?.email}</span>
+                                        <ChevronDown size={14} className="text-text-secondary" />
+                                    </button>
+
+                                    {userDropdown && (
+                                        <div className="absolute right-0 top-full mt-2 w-64 glass-card py-2 animate-slide-down flex flex-col gap-2 shadow-card" style={{ zIndex: 100 }}>
+                                            <div className="px-4 py-2 border-b border-border">
+                                                <p className="text-xs text-text-secondary truncate">{session.user?.email}</p>
+                                            </div>
+
+                                            <button
+                                                onClick={() => signOut({ callbackUrl: '/' })}
+                                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-accent-pink hover:bg-accent-pink/10 transition-colors"
+                                            >
+                                                <LogOut size={14} />
+                                                Sign Out
+                                            </button>
                                         </div>
                                     )}
-                                    <span className="text-sm text-text-primary hidden sm:block max-w-[120px] truncate">{session.user?.name || session.user?.email}</span>
-                                    <ChevronDown size={14} className="text-text-secondary" />
-                                </button>
-
-                                {userDropdown && (
-                                    <div className="absolute right-0 top-full mt-2 w-64 glass-card py-2 animate-slide-down flex flex-col gap-2 shadow-card" style={{ zIndex: 100 }}>
-                                        <div className="px-4 py-2 border-b border-border">
-                                            <p className="text-xs text-text-secondary truncate">{session.user?.email}</p>
-                                        </div>
-
-                                        <button
-                                            onClick={() => signOut({ callbackUrl: '/' })}
-                                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-accent-pink hover:bg-accent-pink/10 transition-colors"
-                                        >
-                                            <LogOut size={14} />
-                                            Sign Out
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+                                </div>
+                            ) : (
+                                <Link href="/auth/login" className="btn-primary text-sm px-4 py-2">
+                                    Sign In
+                                </Link>
+                            )}
 
                             {/* Mobile menu toggle */}
                             <button onClick={() => setMobileOpen(p => !p)} className="md:hidden p-2 rounded-lg hover:bg-bg-hover text-text-secondary">
@@ -115,7 +119,7 @@ export function Navbar() {
                 {/* Mobile nav */}
                 {mobileOpen && (
                     <div className="md:hidden border-t border-border bg-bg-primary/95 px-4 py-3 space-y-1">
-                        {navLinks.map(({ href, label, icon: Icon }) => (
+                        {session && navLinks.map(({ href, label, icon: Icon }) => (
                             <Link
                                 key={href} href={href}
                                 onClick={() => setMobileOpen(false)}

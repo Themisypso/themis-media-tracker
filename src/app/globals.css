@@ -32,16 +32,18 @@
 }
 
 [data-theme='cyberpunk'] {
-  --bg-primary: #dcd004;
-  --bg-secondary: #c2b704;
-  --bg-card: #000000;
+  --bg-primary: #0b0f1a;
+  --bg-secondary: #111827;
+  --bg-card: #0d1323;
   --accent-cyan: #00f0ff;
   --accent-purple: #d112ff;
   --accent-pink: #ff0055;
   --accent-green: #00ff9d;
-  --border: #00f0ff;
-  --text-primary: #000000;
-  --text-secondary: #222222;
+  --border: #e6c200;
+  --border-bright: #00f0ff;
+  --text-primary: #ffffff;
+  --text-secondary: #00f0ff;
+  --text-muted: #8899aa;
 }
 
 [data-theme='retrowave'] {
