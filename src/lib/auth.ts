@@ -25,7 +25,7 @@ export const authOptions: NextAuthOptions = {
                 }
                 const user = await prisma.user.findUnique({
                     where: { email: credentials.email },
-                    select: { id: true, email: true, password: true, name: true, image: true, role: true }
+                    select: { id: true, email: true, password: true, name: true, username: true, image: true, role: true }
                 })
                 if (!user || !user.password) {
                     throw new Error('No user found with this email')
@@ -39,6 +39,7 @@ export const authOptions: NextAuthOptions = {
                     id: user.id,
                     email: user.email,
                     name: user.name,
+                    username: user.username,
                     image: user.image,
                     role: user.role
                 } as any
@@ -61,6 +62,7 @@ export const authOptions: NextAuthOptions = {
                 token.role = user.role
                 token.image = user.image
                 token.name = user.name
+                token.username = (user as any).username // Passed from db
             }
             if (trigger === 'update' && session?.image) {
                 token.image = session.image
@@ -76,18 +78,33 @@ export const authOptions: NextAuthOptions = {
                 session.user.role = token.role as string
                 session.user.image = token.image as string | undefined
                 session.user.name = token.name as string | undefined
+                    ; (session.user as any).username = token.username as string | undefined
             }
             return session
         },
     },
     events: {
         async signIn({ user, account }) {
-            // Update user image from Google if not set
-            if (account?.provider === 'google' && user.image) {
-                await prisma.user.update({
-                    where: { id: user.id },
-                    data: { image: user.image },
-                }).catch(() => { })
+            // Update user image from Google if not set, and generate a missing username
+            if (account?.provider === 'google') {
+                const existingUser = await prisma.user.findUnique({ where: { id: user.id } })
+
+                const updates: any = {}
+                if (user.image && !existingUser?.image) {
+                    updates.image = user.image
+                }
+                if (!existingUser?.username) {
+                    const baseName = (user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 15)
+                    const randomNum = Math.floor(1000 + Math.random() * 9000)
+                    updates.username = `${baseName}_${randomNum}`
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: updates,
+                    }).catch(() => { })
+                }
             }
         },
     },

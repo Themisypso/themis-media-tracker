@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
-import { Search, LayoutDashboard, Library, LogOut, User, Menu, X, Clapperboard, ChevronDown } from 'lucide-react'
+import { Search, LayoutDashboard, Library, LogOut, User, Menu, X, Clapperboard, ChevronDown, Settings } from 'lucide-react'
 import { SearchBar } from './SearchBar'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
@@ -87,14 +87,35 @@ export function Navbar() {
                                     </button>
 
                                     {userDropdown && (
-                                        <div className="absolute right-0 top-full mt-2 w-64 glass-card py-2 animate-slide-down flex flex-col gap-2 shadow-card" style={{ zIndex: 100 }}>
-                                            <div className="px-4 py-2 border-b border-border">
+                                        <div className="absolute right-0 top-full mt-2 w-64 glass-card py-2 animate-slide-down flex flex-col gap-1 shadow-card" style={{ zIndex: 100 }}>
+                                            <div className="px-4 py-2 border-b border-border mb-1">
                                                 <p className="text-xs text-text-secondary truncate">{session.user?.email}</p>
                                             </div>
 
+                                            <Link
+                                                // @ts-ignore
+                                                href={`/user/${session.user?.id}`}
+                                                onClick={() => setUserDropdown(false)}
+                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-secondary hover:text-accent-cyan hover:bg-accent-cyan/10 transition-colors"
+                                            >
+                                                <User size={14} />
+                                                My Profile
+                                            </Link>
+
+                                            <Link
+                                                href="/settings"
+                                                onClick={() => setUserDropdown(false)}
+                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-secondary hover:text-accent-purple hover:bg-accent-purple/10 transition-colors"
+                                            >
+                                                <Settings size={14} />
+                                                Settings
+                                            </Link>
+
+                                            <div className="h-px bg-border my-1" />
+
                                             <button
                                                 onClick={() => signOut({ callbackUrl: '/' })}
-                                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-accent-pink hover:bg-accent-pink/10 transition-colors"
+                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-accent-pink hover:bg-accent-pink/10 transition-colors"
                                             >
                                                 <LogOut size={14} />
                                                 Sign Out

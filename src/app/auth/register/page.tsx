@@ -10,6 +10,7 @@ import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
 export default function RegisterPage() {
     const [name, setName] = useState('')
+    const [username, setUsername] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -23,7 +24,7 @@ export default function RegisterPage() {
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password }),
+                body: JSON.stringify({ name, username, email, password }),
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)
@@ -76,7 +77,15 @@ export default function RegisterPage() {
                             <div className="relative">
                                 <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a5568]" />
                                 <input type="text" value={name} onChange={e => setName(e.target.value)} required
-                                    placeholder="Your name" className="input-cyber pl-9" id="register-name" />
+                                    placeholder="Your display name" className="input-cyber pl-9" id="register-name" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase tracking-wider">Username</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a5568] font-bold text-sm">@</span>
+                                <input type="text" value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} required
+                                    placeholder="unique_nickname" className="input-cyber pl-9" id="register-username" maxLength={20} />
                             </div>
                         </div>
                         <div>

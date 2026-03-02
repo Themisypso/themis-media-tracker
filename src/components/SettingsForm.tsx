@@ -119,16 +119,31 @@ export function SettingsForm({ initialSettings, user }: Props) {
                 </div>
 
                 <div className="space-y-5">
-                    <div>
-                        <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Display Name</label>
-                        <input
-                            type="text"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            className="input-cyber w-full"
-                            placeholder="Your display name"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Display Name</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="input-cyber w-full"
+                                placeholder="Your display name"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Username</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted font-bold text-sm">@</span>
+                                <input
+                                    type="text"
+                                    value={user?.username || ''}
+                                    disabled={true}
+                                    className="input-cyber w-full pl-8 bg-bg-secondary/50 text-text-muted cursor-not-allowed border-none"
+                                    title="Contact admin to change your immutable username"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <div>
