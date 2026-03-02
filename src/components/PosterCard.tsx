@@ -48,11 +48,10 @@ export function PosterCard({ item, onClick }: PosterCardProps) {
     return (
         <div
             onClick={() => onClick(item)}
-            className="group relative cursor-pointer rounded-xl overflow-hidden border border-[#1e2a3a] hover:border-[#2a3f5a] transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover"
-            style={{ background: '#111827' }}
+            className="group relative cursor-pointer rounded-xl overflow-hidden border border-border hover:border-border-bright transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover bg-bg-card"
         >
             {/* Poster */}
-            <div className="relative aspect-[2/3] overflow-hidden bg-[#0d1117]">
+            <div className="relative aspect-[2/3] overflow-hidden bg-bg-secondary">
                 {item.posterUrl ? (
                     <img
                         src={item.posterUrl}
@@ -62,10 +61,10 @@ export function PosterCard({ item, onClick }: PosterCardProps) {
                     />
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #00d4ff22, #7b2fff22)', border: '1px solid #1e2a3a' }}>
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-bg-hover border border-border">
                             {type.icon}
                         </div>
-                        <p className="text-xs text-[#4a5568] text-center px-2 truncate">{item.title}</p>
+                        <p className="text-xs text-text-muted text-center px-2 truncate">{item.title}</p>
                     </div>
                 )}
 
@@ -90,14 +89,14 @@ export function PosterCard({ item, onClick }: PosterCardProps) {
 
             {/* Info */}
             <div className="p-2.5">
-                <p className="text-xs font-semibold text-[#e8edf5] truncate leading-tight">{item.title}</p>
+                <p className="text-xs font-semibold text-text-primary truncate leading-tight">{item.title}</p>
                 <div className="flex items-center justify-between mt-1.5 gap-1">
                     <span className={`text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1 type-${item.type}`}>
                         {type.icon}
                         {type.label}
                     </span>
                     {item.totalTimeMinutes && (
-                        <span className="flex items-center gap-0.5 text-[9px] text-[#8899aa]">
+                        <span className="flex items-center gap-0.5 text-[9px] text-text-secondary">
                             <Clock size={9} />
                             {formatTime(item.totalTimeMinutes)}
                         </span>

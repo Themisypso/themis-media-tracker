@@ -10,25 +10,25 @@ const config: Config = {
         extend: {
             colors: {
                 bg: {
-                    primary: '#080c14',
-                    secondary: '#0d1117',
-                    card: '#111827',
-                    hover: '#1a2235',
+                    primary: 'var(--bg-primary)',
+                    secondary: 'var(--bg-secondary)',
+                    card: 'var(--bg-card)',
+                    hover: 'var(--bg-hover, #1a2235)',
                 },
                 accent: {
-                    cyan: '#00d4ff',
-                    purple: '#7b2fff',
-                    pink: '#ff2d7a',
-                    green: '#00ff9d',
+                    cyan: 'var(--accent-cyan)',
+                    purple: 'var(--accent-purple)',
+                    pink: 'var(--accent-pink)',
+                    green: 'var(--accent-green)',
                 },
                 border: {
-                    DEFAULT: '#1e2a3a',
-                    bright: '#2a3f5a',
+                    DEFAULT: 'var(--border)',
+                    bright: 'var(--border-bright, #2a3f5a)',
                 },
                 text: {
-                    primary: '#e8edf5',
-                    secondary: '#8899aa',
-                    muted: '#4a5568',
+                    primary: 'var(--text-primary)',
+                    secondary: 'var(--text-secondary)',
+                    muted: 'var(--text-muted, #4a5568)',
                 },
             },
             fontFamily: {

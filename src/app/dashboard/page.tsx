@@ -30,7 +30,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
             <div className="glass-card px-4 py-3 text-xs">
-                <p className="text-[#8899aa] mb-1">{label}</p>
+                <p className="text-text-secondary mb-1">{label}</p>
                 {payload.map((p: any) => (
                     <p key={p.name} style={{ color: p.fill || p.color }}>{p.name}: <span className="font-bold">{Math.round(p.value / 60 * 10) / 10}h</span></p>
                 ))}
@@ -74,17 +74,17 @@ export default function DashboardPage() {
     })) : []
 
     return (
-        <div className="min-h-screen" style={{ background: '#080c14' }}>
+        <div className="min-h-screen bg-bg-primary">
             <Navbar />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-2xl font-display font-bold text-[#e8edf5]">
-                        Welcome back, <span style={{ background: 'linear-gradient(135deg, #00d4ff, #7b2fff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    <h1 className="text-2xl font-display font-bold text-text-primary">
+                        Welcome back, <span className="bg-gradient-to-br from-accent-cyan to-accent-purple text-transparent bg-clip-text">
                             {session.user?.name?.split(' ')[0] || 'Tracker'}
                         </span>
                     </h1>
-                    <p className="text-sm text-[#8899aa] mt-1">Here&apos;s your media consumption overview</p>
+                    <p className="text-sm text-text-secondary mt-1">Here&apos;s your media consumption overview</p>
                 </div>
 
                 {loading ? (
@@ -104,7 +104,7 @@ export default function DashboardPage() {
                                 <div key={label} className={`glass-card p-5 ${glow}`}>
                                     <div className="flex items-start justify-between">
                                         <div>
-                                            <p className="text-xs text-[#8899aa] mb-2 font-medium">{label}</p>
+                                            <p className="text-xs text-text-secondary mb-2 font-medium">{label}</p>
                                             <p className="text-2xl font-display font-bold" style={{ color }}>{value}</p>
                                         </div>
                                         <div className="p-2 rounded-lg" style={{ background: `${color}18`, color }}>
@@ -119,43 +119,43 @@ export default function DashboardPage() {
                         <div className="grid lg:grid-cols-2 gap-6 mb-8">
                             {/* Pie chart: by type */}
                             <div className="glass-card p-6">
-                                <h2 className="font-display font-semibold text-[#e8edf5] mb-4">Media Breakdown</h2>
+                                <h2 className="font-display font-semibold text-text-primary mb-4">Media Breakdown</h2>
                                 {typeChartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height={260}>
                                         <PieChart>
                                             <Pie data={typeChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={4}>
                                                 {typeChartData.map((entry) => (
-                                                    <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || '#8899aa'} />
+                                                    <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || 'var(--text-secondary)'} />
                                                 ))}
                                             </Pie>
-                                            <Tooltip formatter={(v: number) => [`${Math.round(v / 60 * 10) / 10}h`, 'Time']} contentStyle={{ background: '#111827', border: '1px solid #1e2a3a', borderRadius: 8 }} />
-                                            <Legend formatter={name => <span style={{ color: TYPE_COLORS[name] || '#8899aa', fontSize: 12 }}>{name}</span>} />
+                                            <Tooltip formatter={(v: number) => [`${Math.round(v / 60 * 10) / 10}h`, 'Time']} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }} />
+                                            <Legend formatter={name => <span style={{ color: TYPE_COLORS[name] || 'var(--text-secondary)', fontSize: 12 }}>{name}</span>} />
                                         </PieChart>
                                     </ResponsiveContainer>
                                 ) : (
-                                    <div className="h-[260px] flex items-center justify-center text-[#4a5568] text-sm">Add media to see breakdown</div>
+                                    <div className="h-[260px] flex items-center justify-center text-text-muted text-sm">Add media to see breakdown</div>
                                 )}
                             </div>
 
                             {/* Bar chart: by type hours */}
                             <div className="glass-card p-6">
-                                <h2 className="font-display font-semibold text-[#e8edf5] mb-4">Hours by Type</h2>
+                                <h2 className="font-display font-semibold text-text-primary mb-4">Hours by Type</h2>
                                 {typeChartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height={260}>
                                         <BarChart data={typeChartData}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3a" />
-                                            <XAxis dataKey="name" tick={{ fill: '#8899aa', fontSize: 11 }} />
-                                            <YAxis tick={{ fill: '#8899aa', fontSize: 11 }} tickFormatter={v => `${Math.round(v / 60)}h`} />
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                            <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
+                                            <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => `${Math.round(v / 60)}h`} />
                                             <Tooltip content={<CustomTooltip />} />
                                             <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                                                 {typeChartData.map(entry => (
-                                                    <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || '#8899aa'} />
+                                                    <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || 'var(--text-secondary)'} />
                                                 ))}
                                             </Bar>
                                         </BarChart>
                                     </ResponsiveContainer>
                                 ) : (
-                                    <div className="h-[260px] flex items-center justify-center text-[#4a5568] text-sm">Add media to see chart</div>
+                                    <div className="h-[260px] flex items-center justify-center text-text-muted text-sm">Add media to see chart</div>
                                 )}
                             </div>
                         </div>
@@ -163,13 +163,13 @@ export default function DashboardPage() {
                         {/* Yearly Chart */}
                         {yearlyChartData.length > 0 && (
                             <div className="glass-card p-6 mb-6">
-                                <h2 className="font-display font-semibold text-[#e8edf5] mb-4">Yearly Consumption</h2>
+                                <h2 className="font-display font-semibold text-text-primary mb-4">Yearly Consumption</h2>
                                 <ResponsiveContainer width="100%" height={220}>
                                     <BarChart data={yearlyChartData}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3a" />
-                                        <XAxis dataKey="year" tick={{ fill: '#8899aa', fontSize: 12 }} />
-                                        <YAxis tick={{ fill: '#8899aa', fontSize: 12 }} tickFormatter={v => `${Math.round(v / 60)}h`} />
-                                        <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1e2a3a', borderRadius: 8 }} formatter={(v: number) => [`${Math.round(v / 60 * 10) / 10}h`, 'Total time']} labelStyle={{ color: '#8899aa' }} />
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                        <XAxis dataKey="year" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                                        <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} tickFormatter={v => `${Math.round(v / 60)}h`} />
+                                        <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }} formatter={(v: number) => [`${Math.round(v / 60 * 10) / 10}h`, 'Total time']} labelStyle={{ color: 'var(--text-secondary)' }} />
                                         <Bar dataKey="minutes" fill="url(#yearGrad)" radius={[4, 4, 0, 0]} />
                                         <defs>
                                             <linearGradient id="yearGrad" x1="0" y1="0" x2="0" y2="1">
@@ -185,7 +185,7 @@ export default function DashboardPage() {
                         {/* Status breakdown */}
                         {statusData.length > 0 && (
                             <div className="glass-card p-6">
-                                <h2 className="font-display font-semibold text-[#e8edf5] mb-4">Status Overview</h2>
+                                <h2 className="font-display font-semibold text-text-primary mb-4">Status Overview</h2>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                     {statusData.map(({ name, value }) => (
                                         <div key={name} className={`rounded-xl p-4 text-center status-${name}`} style={{ background: `${STATUS_COLORS[name]}12` }}>
@@ -199,9 +199,9 @@ export default function DashboardPage() {
 
                         {analytics?.overview.totalItems === 0 && (
                             <div className="text-center py-20 glass-card">
-                                <Film size={48} className="text-[#4a5568] mx-auto mb-4" />
-                                <h3 className="font-display text-lg font-semibold text-[#e8edf5] mb-2">Your library is empty</h3>
-                                <p className="text-[#8899aa] text-sm mb-6">Start adding anime, movies, shows and games to see your stats here.</p>
+                                <Film size={48} className="text-text-muted mx-auto mb-4" />
+                                <h3 className="font-display text-lg font-semibold text-text-primary mb-2">Your library is empty</h3>
+                                <p className="text-text-secondary text-sm mb-6">Start adding anime, movies, shows and games to see your stats here.</p>
                                 <a href="/search" className="btn-primary inline-flex items-center gap-2">
                                     Add your first title
                                 </a>

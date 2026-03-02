@@ -66,6 +66,10 @@ export function Navbar() {
 
                         {/* Right: search + avatar */}
                         <div className="flex items-center gap-3">
+                            <div className="hidden sm:block">
+                                <ThemeSwitcher />
+                            </div>
+
                             {/* User dropdown */}
                             <div className="relative" ref={dropdownRef}>
                                 <button
@@ -87,10 +91,6 @@ export function Navbar() {
                                     <div className="absolute right-0 top-full mt-2 w-64 glass-card py-2 animate-slide-down flex flex-col gap-2 shadow-card" style={{ zIndex: 100 }}>
                                         <div className="px-4 py-2 border-b border-border">
                                             <p className="text-xs text-text-secondary truncate">{session.user?.email}</p>
-                                        </div>
-
-                                        <div className="px-4 py-2 border-b border-border flex justify-center">
-                                            <ThemeSwitcher />
                                         </div>
 
                                         <button

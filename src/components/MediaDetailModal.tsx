@@ -108,7 +108,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                 {item.backdropUrl && (
                     <div className="relative h-48 overflow-hidden rounded-t-2xl">
                         <img src={item.backdropUrl} alt="" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0d1117]" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-bg-secondary" />
                         <button onClick={onClose} className="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors">
                             <X size={16} />
                         </button>
@@ -119,13 +119,13 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                     {/* Poster */}
                     <div className="flex-shrink-0">
                         {item.backdropUrl && (
-                            <button onClick={onClose} className="absolute top-3 right-3 p-2 rounded-full bg-[#111827] text-[#8899aa] hover:text-white transition-colors hidden">
+                            <button onClick={onClose} className="absolute top-3 right-3 p-2 rounded-full bg-bg-card text-text-secondary hover:text-text-primary transition-colors hidden">
                                 <X size={16} />
                             </button>
                         )}
                         {!item.backdropUrl && (
                             <div className="flex justify-end mb-2">
-                                <button onClick={onClose} className="p-2 rounded-full text-[#8899aa] hover:text-white transition-colors hover:bg-[#1a2235]">
+                                <button onClick={onClose} className="p-2 rounded-full text-text-secondary hover:text-text-primary transition-colors hover:bg-bg-hover">
                                     <X size={18} />
                                 </button>
                             </div>
@@ -134,8 +134,8 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                             {item.posterUrl ? (
                                 <img src={item.posterUrl} alt={item.title} className="w-full aspect-[2/3] object-cover" />
                             ) : (
-                                <div className="w-full aspect-[2/3] bg-[#1a2235] flex items-center justify-center">
-                                    <Film size={32} className="text-[#4a5568]" />
+                                <div className="w-full aspect-[2/3] bg-bg-hover flex items-center justify-center">
+                                    <Film size={32} className="text-text-muted" />
                                 </div>
                             )}
                         </div>
@@ -145,9 +145,9 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-display font-bold text-[#e8edf5]">{item.title}</h2>
+                                <h2 className="text-xl font-display font-bold text-text-primary">{item.title}</h2>
                                 <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                    {item.releaseYear && <span className="text-sm text-[#8899aa]">{item.releaseYear}</span>}
+                                    {item.releaseYear && <span className="text-sm text-text-secondary">{item.releaseYear}</span>}
                                     <span className={`text-xs px-2 py-0.5 rounded-full type-${item.type}`}>{item.type}</span>
                                     {item.tmdbRating && <span className="text-sm text-[#ffd700]">★ {item.tmdbRating} TMDB</span>}
                                     {item.imdbId && (
@@ -160,12 +160,12 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                                 {item.genres.length > 0 && (
                                     <div className="flex gap-1.5 mt-2 flex-wrap">
                                         {item.genres.map(g => (
-                                            <span key={g} className="text-xs px-2 py-0.5 rounded bg-[#1a2235] text-[#8899aa] border border-[#1e2a3a]">{g}</span>
+                                            <span key={g} className="text-xs px-2 py-0.5 rounded bg-bg-hover text-text-secondary border border-border">{g}</span>
                                         ))}
                                     </div>
                                 )}
                                 {item.overview && (
-                                    <p className="text-xs text-[#8899aa] mt-3 line-clamp-3 leading-relaxed">{item.overview}</p>
+                                    <p className="text-xs text-text-secondary mt-3 line-clamp-3 leading-relaxed">{item.overview}</p>
                                 )}
                             </div>
                         </div>
@@ -176,7 +176,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {/* Status */}
                             <div>
-                                <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase tracking-wider">Status</label>
+                                <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Status</label>
                                 <select
                                     value={status}
                                     onChange={e => setStatus(e.target.value)}
@@ -193,12 +193,12 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                             {(item.type === 'ANIME' || item.type === 'TVSHOW') && (
                                 <>
                                     <div>
-                                        <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase tracking-wider">Episodes Watched</label>
+                                        <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Episodes Watched</label>
                                         <input type="number" min="0" value={episodeCount} onChange={e => setEpisodeCount(e.target.value as any)}
                                             className="input-cyber" placeholder="e.g. 12" id={`eps-${item.id}`} />
                                     </div>
                                     <div>
-                                        <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase tracking-wider">Episode Duration (min)</label>
+                                        <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Episode Duration (min)</label>
                                         <input type="number" min="1" value={episodeDuration} onChange={e => setEpisodeDuration(e.target.value as any)}
                                             className="input-cyber" placeholder="e.g. 24" id={`dur-${item.id}`} />
                                     </div>
@@ -208,7 +208,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                             {/* Playtime for games */}
                             {item.type === 'GAME' && (
                                 <div>
-                                    <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase tracking-wider">Playtime (hours)</label>
+                                    <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Playtime (hours)</label>
                                     <input type="number" min="0" step="0.5" value={playtimeHours} onChange={e => setPlaytimeHours(e.target.value as any)}
                                         className="input-cyber" placeholder="e.g. 120" id={`play-${item.id}`} />
                                 </div>
@@ -217,8 +217,8 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                             {/* Runtime info for movies */}
                             {item.type === 'MOVIE' && item.runtime && (
                                 <div>
-                                    <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase tracking-wider">Runtime</label>
-                                    <div className="input-cyber flex items-center gap-2 text-[#8899aa]">
+                                    <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Runtime</label>
+                                    <div className="input-cyber flex items-center gap-2 text-text-secondary">
                                         <Clock size={14} /> {formatTime(item.runtime)}
                                     </div>
                                 </div>
@@ -227,7 +227,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
 
                         {/* Star Rating */}
                         <div className="mt-4">
-                            <label className="block text-xs text-[#8899aa] mb-2 font-medium uppercase tracking-wider">Your Rating</label>
+                            <label className="block text-xs text-text-secondary mb-2 font-medium uppercase tracking-wider">Your Rating</label>
                             <div className="flex gap-1">
                                 {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
                                     <button key={n} type="button"
@@ -235,7 +235,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                                         onMouseEnter={() => setHoverRating(n)}
                                         onMouseLeave={() => setHoverRating(0)}
                                         className="star"
-                                        style={{ color: n <= (hoverRating || rating) ? '#ffd700' : '#2a3f5a' }}
+                                        style={{ color: n <= (hoverRating || rating) ? '#ffd700' : 'var(--border-bright)' }}
                                         aria-label={`Rate ${n}`}
                                     >
                                         ★
@@ -247,7 +247,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
 
                         {/* Notes */}
                         <div className="mt-4">
-                            <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase tracking-wider">Notes</label>
+                            <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Notes</label>
                             <textarea
                                 value={notes}
                                 onChange={e => setNotes(e.target.value)}
@@ -260,9 +260,9 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
 
                         {/* Total time calculated */}
                         {item.totalTimeMinutes && (
-                            <div className="mt-3 flex items-center gap-2 text-sm text-[#8899aa]">
-                                <Clock size={14} className="text-[#00d4ff]" />
-                                <span>Calculated time: <span className="text-[#00d4ff] font-semibold">{formatTime(item.totalTimeMinutes)}</span></span>
+                            <div className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
+                                <Clock size={14} className="text-accent-cyan" />
+                                <span>Calculated time: <span className="text-accent-cyan font-semibold">{formatTime(item.totalTimeMinutes)}</span></span>
                             </div>
                         )}
 

@@ -84,7 +84,7 @@ export function SearchBar({ onSelect, placeholder = 'Search anime, movies, shows
     return (
         <div ref={containerRef} className={`relative ${className}`}>
             <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8899aa]" />
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
                 <input
                     type="text"
                     value={query}
@@ -96,7 +96,7 @@ export function SearchBar({ onSelect, placeholder = 'Search anime, movies, shows
                     id="global-search"
                 />
                 {loading && (
-                    <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00d4ff] animate-spin" />
+                    <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-accent-cyan animate-spin" />
                 )}
             </div>
 
@@ -106,19 +106,19 @@ export function SearchBar({ onSelect, placeholder = 'Search anime, movies, shows
                         <button
                             key={result.id}
                             onClick={() => handleSelect(result)}
-                            className="w-full flex items-center gap-3 px-3 py-3 hover:bg-[#1a2235] transition-colors text-left border-b border-[#0d1117] last:border-0"
+                            className="w-full flex items-center gap-3 px-3 py-3 hover:bg-bg-hover transition-colors text-left border-b border-border last:border-0"
                         >
                             {result.posterUrl ? (
                                 <img src={result.posterUrl} alt={result.title} className="w-10 h-14 object-cover rounded flex-shrink-0" style={{ minWidth: 40 }} />
                             ) : (
-                                <div className="w-10 h-14 bg-[#1a2235] rounded flex-shrink-0 flex items-center justify-center">
-                                    <Film size={16} className="text-[#4a5568]" />
+                                <div className="w-10 h-14 bg-bg-hover rounded flex-shrink-0 flex items-center justify-center">
+                                    <Film size={16} className="text-text-muted" />
                                 </div>
                             )}
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-[#e8edf5] truncate">{result.title}</p>
+                                <p className="text-sm font-medium text-text-primary truncate">{result.title}</p>
                                 <div className="flex items-center gap-2 mt-1">
-                                    {result.releaseYear && <span className="text-xs text-[#8899aa]">{result.releaseYear}</span>}
+                                    {result.releaseYear && <span className="text-xs text-text-secondary">{result.releaseYear}</span>}
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 type-${result.mediaType === 'tv' ? 'TVSHOW' : result.mediaType.toUpperCase()}`}>
                                         {typeIcons[result.mediaType]}
                                         {typeLabels[result.mediaType] || result.mediaType}
@@ -134,7 +134,7 @@ export function SearchBar({ onSelect, placeholder = 'Search anime, movies, shows
             )}
 
             {open && query.length >= 2 && !loading && results.length === 0 && (
-                <div className="search-dropdown p-4 text-center text-sm text-[#8899aa]">
+                <div className="search-dropdown p-4 text-center text-sm text-text-secondary">
                     No results found for &ldquo;{query}&rdquo;
                 </div>
             )}
