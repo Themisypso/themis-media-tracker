@@ -1,6 +1,7 @@
 'use client'
 
 import { Film, Star, Clock, Tv, Gamepad2 } from 'lucide-react'
+import Link from 'next/link'
 
 interface MediaItem {
     id: string
@@ -25,7 +26,8 @@ interface MediaItem {
 
 interface PosterCardProps {
     item: MediaItem
-    onClick: (item: MediaItem) => void
+    onClick?: (item: MediaItem) => void
+    href?: string
 }
 
 const typeConfig: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -35,7 +37,7 @@ const typeConfig: Record<string, { label: string; icon: React.ReactNode }> = {
     GAME: { label: 'Game', icon: <Gamepad2 size={11} /> },
 }
 
-export function PosterCard({ item, onClick }: PosterCardProps) {
+export function PosterCard({ item, onClick, href }: PosterCardProps) {
     const type = typeConfig[item.type] || { label: item.type, icon: <Film size={11} /> }
 
     function formatTime(min: number | null) {
@@ -45,10 +47,10 @@ export function PosterCard({ item, onClick }: PosterCardProps) {
         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
     }
 
-    return (
+    const cardContent = (
         <div
-            onClick={() => onClick(item)}
-            className="group relative cursor-pointer rounded-xl overflow-hidden border border-border hover:border-border-bright transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover bg-bg-card"
+            onClick={onClick ? () => onClick(item) : undefined}
+            className={`group relative cursor-pointer rounded-xl overflow-hidden border border-border hover:border-border-bright transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover bg-bg-card ${href ? '' : ''}`}
         >
             {/* Poster */}
             <div className="relative aspect-[2/3] overflow-hidden bg-bg-secondary">
@@ -105,4 +107,10 @@ export function PosterCard({ item, onClick }: PosterCardProps) {
             </div>
         </div>
     )
+
+    if (href) {
+        return <Link href={href} className="block">{cardContent}</Link>
+    }
+
+    return cardContent
 }

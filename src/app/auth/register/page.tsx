@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Clapperboard, Mail, Lock, User, Loader2, Chrome } from 'lucide-react'
 import { signIn } from 'next-auth/react'
 import toast from 'react-hot-toast'
+import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
 export default function RegisterPage() {
     const [name, setName] = useState('')
@@ -36,7 +37,10 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center px-4 cyber-bg">
+        <div className="min-h-screen flex items-center justify-center px-4 cyber-bg relative">
+            <div className="absolute top-4 right-4">
+                <ThemeSwitcher />
+            </div>
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <Link href="/" className="inline-flex items-center gap-2 mb-6">

@@ -1,28 +1,96 @@
 import Link from 'next/link'
 import { Clapperboard, BarChart3, Clock, Star, ArrowRight, Tv, Film, Gamepad2, Check } from 'lucide-react'
+import { ThemeSwitcher } from '@/components/ThemeSwitcher'
+import { prisma } from '@/lib/prisma'
+import { PosterCard } from '@/components/PosterCard'
+import { Navbar } from '@/components/Navbar'
 
-export default function LandingPage() {
+export const revalidate = 3600 // Cache for 1 hour, or make dynamic
+
+export default async function LandingPage() {
+    // 1. Fetch Trending (most saved items)
+    const trendingGroups = await prisma.mediaItem.groupBy({
+        by: ['tmdbId'],
+        _count: { tmdbId: true },
+        orderBy: { _count: { tmdbId: 'desc' } },
+        where: { tmdbId: { not: null } },
+        take: 6,
+    })
+    const trendingIds = trendingGroups.map(g => g.tmdbId).filter(Boolean) as string[]
+    let trendingItems: any[] = []
+    if (trendingIds.length > 0) {
+        const raw = await prisma.mediaItem.findMany({
+            where: { tmdbId: { in: trendingIds } }
+        })
+        for (const id of trendingIds) {
+            const item = raw.find(r => r.tmdbId === id)
+            if (item) trendingItems.push(item)
+        }
+    }
+
+    // 2. Fetch Newest items
+    const rawNewest = await prisma.mediaItem.findMany({
+        take: 30,
+        where: { tmdbId: { not: null } },
+        orderBy: { createdAt: 'desc' }
+    })
+    const newestItems: any[] = []
+    const seenNew = new Set()
+    for (const item of rawNewest) {
+        if (!seenNew.has(item.tmdbId)) {
+            seenNew.add(item.tmdbId)
+            newestItems.push(item)
+            if (newestItems.length === 6) break
+        }
+    }
+
+    // 3. Fetch Top Rated (Global Average might be complex, so let's pick high rating items)
+    const rawTop = await prisma.mediaItem.findMany({
+        take: 30,
+        where: { tmdbId: { not: null }, tmdbRating: { gte: 8 } },
+        orderBy: { tmdbRating: 'desc' }
+    })
+    const topItems: any[] = []
+    const seenTop = new Set()
+    for (const item of rawTop) {
+        if (!seenTop.has(item.tmdbId)) {
+            seenTop.add(item.tmdbId)
+            topItems.push(item)
+            if (topItems.length === 6) break
+        }
+    }
+
+    const allIds = [
+        ...trendingItems.map(i => i.tmdbId),
+        ...newestItems.map(i => i.tmdbId),
+        ...topItems.map(i => i.tmdbId)
+    ].filter(Boolean) as string[]
+
+    // Fetch average userRatings for all items shown on the landing page
+    if (allIds.length > 0) {
+        const ratingAggs = await prisma.mediaItem.groupBy({
+            by: ['tmdbId'],
+            _avg: { userRating: true },
+            where: { tmdbId: { in: allIds }, userRating: { not: null } }
+        })
+        const ratingMap = new Map(ratingAggs.map(r => [r.tmdbId, r._avg.userRating ? Math.round(r._avg.userRating * 10) / 10 : null]))
+
+        // Override the single row's userRating with the platform average
+        for (const list of [trendingItems, newestItems, topItems]) {
+            for (const item of list) {
+                if (item.tmdbId && ratingMap.has(item.tmdbId)) {
+                    item.userRating = ratingMap.get(item.tmdbId)
+                } else {
+                    item.userRating = null // Don't show a random user's rating, only averages
+                }
+            }
+        }
+    }
+
     return (
         <main className="min-h-screen cyber-bg">
-            {/* Nav */}
-            <nav className="flex items-center justify-between px-6 py-5 max-w-7xl mx-auto">
-                <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #00d4ff, #7b2fff)' }}>
-                        <Clapperboard size={20} className="text-white" />
-                    </div>
-                    <span className="font-display font-bold text-xl" style={{ background: 'linear-gradient(135deg, #00d4ff, #7b2fff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        Themis
-                    </span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <Link href="/auth/login" className="text-sm text-[#8899aa] hover:text-[#e8edf5] transition-colors px-4 py-2">
-                        Sign In
-                    </Link>
-                    <Link href="/auth/register" className="btn-primary text-sm">
-                        Get Started
-                    </Link>
-                </div>
-            </nav>
+            <Navbar />
+
 
             {/* Hero */}
             <section className="text-center px-6 py-20 max-w-5xl mx-auto">
@@ -69,38 +137,58 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* Features */}
-            <section className="px-6 py-16 max-w-6xl mx-auto">
-                <h2 className="text-3xl font-display font-bold text-center mb-12">
-                    <span style={{ background: 'linear-gradient(135deg, #00d4ff, #7b2fff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        Everything you need
-                    </span>
-                </h2>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[
-                        { icon: <Clock size={22} />, color: '#00d4ff', title: 'Time Analytics', desc: 'See exactly how many hours you\'ve spent on anime, movies, TV shows and games.' },
-                        { icon: <BarChart3 size={22} />, color: '#7b2fff', title: 'Beautiful Charts', desc: 'Bar and pie charts show your yearly consumption and media breakdown at a glance.' },
-                        { icon: <Star size={22} />, color: '#ffd700', title: 'Personal Ratings', desc: 'Rate and review every title. 1-10 star system with personal notes.' },
-                        { icon: <Film size={22} />, color: '#ff9500', title: 'TMDB Auto-Fill', desc: 'Search and auto-populate poster, genres, runtime, and IMDB rating from TMDB.' },
-                        { icon: <Clapperboard size={22} />, color: '#00ff9d', title: 'Status Tracking', desc: 'Mark as Watching, Completed, Planned or Dropped. Filter your library instantly.' },
-                        { icon: <Gamepad2 size={22} />, color: '#ff2d7a', title: 'Games Too', desc: 'Track your game playtime manually. Combined with watch stats for total media time.' },
-                    ].map(({ icon, color, title, desc }) => (
-                        <div key={title} className="glass-card p-6 hover:border-[#2a3f5a] transition-all hover:-translate-y-1">
-                            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: `${color}18`, color, border: `1px solid ${color}33` }}>
-                                {icon}
-                            </div>
-                            <h3 className="font-display font-semibold text-[#e8edf5] mb-2">{title}</h3>
-                            <p className="text-sm text-[#8899aa] leading-relaxed">{desc}</p>
+            {/* Media Showcase Sections */}
+            <div className="mt-24 space-y-16 max-w-[1400px] mx-auto text-left">
+                {/* Trending Section */}
+                {trendingItems.length > 0 && (
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-display font-bold text-text-primary">Trending Now</h2>
+                            <Link href="/explore?sort=trending" className="text-sm font-medium text-accent-cyan hover:underline">View All</Link>
                         </div>
-                    ))}
-                </div>
-            </section>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            {trendingItems.map(item => (
+                                <PosterCard key={`trending-${item.id}`} item={item} href={`/media/${item.id}`} />
+                            ))}
+                        </div>
+                    </div>
+                )}
 
+                {/* Newest Additions Section */}
+                {newestItems.length > 0 && (
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-display font-bold text-text-primary">Recently Tracked</h2>
+                            <Link href="/explore?sort=newest" className="text-sm font-medium text-accent-cyan hover:underline">View All</Link>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            {newestItems.map(item => (
+                                <PosterCard key={`newest-${item.id}`} item={item} href={`/media/${item.id}`} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Top Rated Section */}
+                {topItems.length > 0 && (
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-display font-bold text-text-primary">Highest Rated</h2>
+                            <Link href="/explore?sort=top" className="text-sm font-medium text-accent-cyan hover:underline">View All</Link>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            {topItems.map(item => (
+                                <PosterCard key={`top-${item.id}`} item={item} href={`/media/${item.id}`} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
             {/* CTA */}
-            <section className="text-center px-6 py-20">
-                <div className="max-w-2xl mx-auto glass-card p-12" style={{ boxShadow: '0 0 60px rgba(0,212,255,0.1)' }}>
-                    <h2 className="text-3xl font-display font-bold mb-4 text-[#e8edf5]">Ready to start tracking?</h2>
-                    <p className="text-[#8899aa] mb-8">Create your free account and see how much of your life you&apos;ve given to great stories.</p>
+            <section className="text-center px-6 py-20 border-t border-border mt-12 bg-bg-secondary">
+                <div className="max-w-2xl mx-auto glass-card p-12" style={{ boxShadow: '0 0 60px rgba(0,212,255,0.05)' }}>
+                    <h2 className="text-3xl font-display font-bold mb-4 text-text-primary">Ready to start tracking?</h2>
+                    <p className="text-text-secondary mb-8">Create your free account and track anime, movies, TV shows, and games.</p>
                     <Link href="/auth/register" className="btn-primary text-base px-10 py-4 inline-flex items-center gap-2">
                         Create Free Account <ArrowRight size={18} />
                     </Link>
@@ -115,6 +203,6 @@ export default function LandingPage() {
                 </div>
                 <p className="text-xs text-[#4a5568]">Powered by TMDB API. Built for obsessive media consumers.</p>
             </footer>
-        </main>
+        </main >
     )
 }

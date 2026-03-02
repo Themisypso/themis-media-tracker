@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Clapperboard, Mail, Lock, Loader2, Chrome } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
 export default function LoginPage() {
     const [email, setEmail] = useState('')
@@ -36,7 +37,10 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center px-4 cyber-bg">
+        <div className="min-h-screen flex items-center justify-center px-4 cyber-bg relative">
+            <div className="absolute top-4 right-4">
+                <ThemeSwitcher />
+            </div>
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-8">
