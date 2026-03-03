@@ -266,15 +266,15 @@ export function BrowseMedia({ type, title, description, baseFilters }: BrowseMed
                         <h3 className="text-xl font-bold text-[#e8edf5]">No results found</h3>
                         <p className="text-sm text-[#8899aa] mt-2"><p className="text-sm text-[#8899aa] mt-2">
   Try adjusting your filters to find what you&apos;re looking for.
-</p>	</p>
+</p>
                     </div>
                 )}
 
                 {!loading && !hasMore && items.length > 0 && (
                     <div className="py-12 text-center text-text-muted text-sm">
-                       <p>
+                       
  			 You&apos;ve reached the end of the list.
-			</p>
+			
                     </div>
                 )}
             </div>
