@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
@@ -55,6 +55,18 @@ const tabColor: Record<string, string> = {
 }
 
 export default function LibraryPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen cyber-bg flex items-center justify-center">
+                <Loader2 className="animate-spin text-accent-cyan" size={32} />
+            </div>
+        }>
+            <LibraryContent />
+        </Suspense>
+    )
+}
+
+function LibraryContent() {
     const { data: session, status: sessionStatus } = useSession()
     const router = useRouter()
     const searchParams = useSearchParams()
