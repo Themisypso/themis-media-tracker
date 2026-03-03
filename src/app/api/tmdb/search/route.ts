@@ -30,12 +30,21 @@ export async function GET(req: Request) {
 
         const data = await res.json()
 
-        // Normalize results
-        const results = (data.results || []).slice(0, 12).map((item: any) => ({
+        // Normalize results — filter out "person" from multi search
+        const rawResults = (data.results || [])
+        const filtered = type === 'multi'
+            ? rawResults.filter((item: any) => item.media_type !== 'person')
+            : rawResults
+
+        const results = filtered.slice(0, 12).map((item: any) => ({
             id: item.id,
             title: item.title || item.name,
             mediaType: item.media_type || type,
-            posterUrl: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : null,
+            posterUrl: item.poster_path
+                ? `https://image.tmdb.org/t/p/w342${item.poster_path}`
+                : item.profile_path
+                    ? `https://image.tmdb.org/t/p/w342${item.profile_path}`
+                    : null,
             backdropUrl: item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : null,
             releaseYear: item.release_date
                 ? parseInt(item.release_date.split('-')[0])

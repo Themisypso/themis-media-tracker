@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { revalidateTag } from 'next/cache'
 import { z } from 'zod'
 
 const updateSchema = z.object({
@@ -59,6 +60,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
             data: { ...updates, totalTimeMinutes },
         })
 
+        revalidateTag('landing-data')
         return NextResponse.json({ item: updated })
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -76,5 +78,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     await prisma.mediaItem.delete({ where: { id: params.id } })
+    revalidateTag('landing-data')
     return NextResponse.json({ success: true })
 }

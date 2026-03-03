@@ -14,7 +14,6 @@ export function AddMediaClientWidget({ baseItem }: Props) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [status, setStatus] = useState('PLANNED')
-    const [rating, setRating] = useState(0)
 
     if (!open) {
         return (
@@ -41,7 +40,6 @@ export function AddMediaClientWidget({ baseItem }: Props) {
                 tmdbRating: baseItem.tmdbRating,
                 runtime: baseItem.runtime,
                 episodeCount: baseItem.episodeCount,
-                userRating: rating > 0 ? rating : null,
             }
 
             const res = await fetch('/api/media', {
@@ -71,18 +69,7 @@ export function AddMediaClientWidget({ baseItem }: Props) {
                 <option value="DROPPED">Dropped</option>
             </select>
 
-            <label className="block text-xs text-text-secondary mb-1">Your Rating</label>
-            <div className="flex gap-1 mb-5 bg-bg-secondary p-2.5 rounded-lg border border-border justify-center overflow-x-auto scrollbar-none">
-                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                    <button key={n} type="button" onClick={() => setRating(rating === n ? 0 : n)}
-                        className="text-lg hover:scale-125 transition-transform px-0.5"
-                        style={{ color: n <= rating ? '#ffd700' : 'var(--border-bright)' }}>
-                        ★
-                    </button>
-                ))}
-            </div>
-
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-2">
                 <button onClick={() => setOpen(false)} disabled={loading} className="px-4 py-2 rounded-lg text-sm bg-bg-hover text-text-secondary border border-border flex-1 font-medium hover:bg-bg-card transition-colors">
                     Cancel
                 </button>

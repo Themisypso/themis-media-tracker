@@ -5,7 +5,8 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
 import { SearchBar } from '@/components/SearchBar'
-import { Search, Info, Plus, Loader2, Gamepad2, Tv, Film } from 'lucide-react'
+import { GameSearch } from '@/components/GameSearch'
+import { Search, Info, Plus, Loader2, Film } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 function SearchContent() {
@@ -17,10 +18,6 @@ function SearchContent() {
 
     const [loadingId, setLoadingId] = useState<string | null>(null)
     const [selectedDetails, setSelectedDetails] = useState<any | null>(null)
-
-    // For manual game entry
-    const [manualGame, setManualGame] = useState({ title: '', status: 'PLANNED', playtimeHours: '' })
-    const [addingGame, setAddingGame] = useState(false)
 
     useEffect(() => {
         if (status === 'unauthenticated') router.push('/auth/login')
@@ -93,33 +90,6 @@ function SearchContent() {
         } catch (err: any) {
             toast.error(err.message || 'Failed to add')
         }
-    }
-
-    async function handleAddGame(e: React.FormEvent) {
-        e.preventDefault()
-        if (!manualGame.title) return toast.error('Title is required')
-        setAddingGame(true)
-
-        try {
-            const payload = {
-                title: manualGame.title,
-                type: 'GAME',
-                status: manualGame.status,
-                playtimeHours: manualGame.playtimeHours ? parseFloat(manualGame.playtimeHours) : null,
-            }
-            const res = await fetch('/api/media', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error)
-            toast.success('Game added to library!')
-            setManualGame({ title: '', status: 'PLANNED', playtimeHours: '' })
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to add')
-        }
-        setAddingGame(false)
     }
 
     if (status === 'loading' || !session) return null
@@ -197,53 +167,9 @@ function SearchContent() {
                     )}
                 </div>
 
-                {/* Manual Game Entry */}
-                <div className="glass-card p-6 min-h-[400px]">
-                    <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[#1e2a3a]">
-                        <Gamepad2 className="text-[#00ff9d]" size={20} />
-                        <h2 className="font-display font-semibold text-lg text-[#e8edf5]">Add Game (Manual)</h2>
-                    </div>
-
-                    <p className="text-sm text-[#8899aa] mb-6">TMDB doesn&apos;t support games. Enter your games manually to track them alongside your watch history.</p>
-
-                    <form onSubmit={handleAddGame} className="space-y-4">
-                        <div>
-                            <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase">Game Title</label>
-                            <input
-                                type="text" required value={manualGame.title} onChange={e => setManualGame(p => ({ ...p, title: e.target.value }))}
-                                className="input-cyber" placeholder="e.g. Cyberpunk 2077"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase">Playtime (Hours)</label>
-                                <input
-                                    type="number" step="0.5" min="0" value={manualGame.playtimeHours} onChange={e => setManualGame(p => ({ ...p, playtimeHours: e.target.value }))}
-                                    className="input-cyber" placeholder="e.g. 60.5"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs text-[#8899aa] mb-1.5 font-medium uppercase">Status</label>
-                                <select
-                                    value={manualGame.status} onChange={e => setManualGame(p => ({ ...p, status: e.target.value }))}
-                                    className="input-cyber"
-                                >
-                                    <option value="WATCHING">Playing</option>
-                                    <option value="COMPLETED">Completed</option>
-                                    <option value="PLANNED">Planned</option>
-                                    <option value="DROPPED">Dropped</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <button type="submit" disabled={addingGame} className="w-full flex items-center justify-center gap-2 py-3 mt-4 rounded-lg bg-gradient-to-r from-[#00ff9d] to-[#00d4ff] text-[#080c14] font-bold hover:shadow-glow-green transition-all disabled:opacity-50">
-                            {addingGame ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                            Save Game Entry
-                        </button>
-                    </form>
-                </div>
+                <GameSearch />
             </div>
+
         </>
     )
 }

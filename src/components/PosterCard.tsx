@@ -1,7 +1,8 @@
 'use client'
 
-import { Film, Star, Clock, Tv, Gamepad2 } from 'lucide-react'
+import { Film, Star, Clock, Tv, Gamepad2, Heart } from 'lucide-react'
 import Link from 'next/link'
+import { useMediaFavorites } from '@/hooks/useMediaFavorites'
 
 interface MediaItem {
     id: string
@@ -13,6 +14,7 @@ interface MediaItem {
     userRating: number | null
     notes: string | null
     releaseYear: number | null
+    tmdbId?: string | null
     totalTimeMinutes: number | null
     runtime: number | null
     episodeCount: number | null
@@ -28,6 +30,7 @@ interface PosterCardProps {
     item: MediaItem
     onClick?: (item: MediaItem) => void
     href?: string
+    hideStatus?: boolean
 }
 
 const typeConfig: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -37,8 +40,13 @@ const typeConfig: Record<string, { label: string; icon: React.ReactNode }> = {
     GAME: { label: 'Game', icon: <Gamepad2 size={11} /> },
 }
 
-export function PosterCard({ item, onClick, href }: PosterCardProps) {
+export function PosterCard({ item, onClick, href, hideStatus }: PosterCardProps) {
     const type = typeConfig[item.type] || { label: item.type, icon: <Film size={11} /> }
+    const { isFavorited, toggleFavorite } = useMediaFavorites()
+
+    // We try to use tmdbId if present, else fallback to id (for Discovery/Explore pages where id IS the tmdbId)
+    const tmdbId = item.tmdbId || item.id
+    const fav = isFavorited(tmdbId)
 
     function formatTime(min: number | null) {
         if (!min) return null
@@ -74,15 +82,37 @@ export function PosterCard({ item, onClick, href }: PosterCardProps) {
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
                 {/* Status badge top-right */}
-                <span className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full font-medium status-${item.status}`}>
-                    {item.status === 'WATCHING' ? '▶ Watching' :
-                        item.status === 'COMPLETED' ? '✓ Done' :
-                            item.status === 'PLANNED' ? '+ Planned' : '✕ Dropped'}
-                </span>
+                {!hideStatus && (
+                    <span className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full font-medium status-${item.status}`}>
+                        {item.status === 'WATCHING' ? '▶ Watching' :
+                            item.status === 'COMPLETED' ? '✓ Done' :
+                                item.status === 'PLANNED' ? '+ Planned' : '✕ Dropped'}
+                    </span>
+                )}
 
-                {/* Rating badge top-left */}
+                {/* Favorite badge top-left */}
+                <button
+                    onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        toggleFavorite({
+                            tmdbId: tmdbId as string,
+                            title: item.title,
+                            type: item.type,
+                            posterUrl: item.posterUrl,
+                            releaseYear: item.releaseYear
+                        })
+                    }}
+                    className={`absolute top-2 left-2 p-1.5 rounded-full z-10 transition-all duration-300 shadow-lg backdrop-blur-sm
+                        ${fav ? 'bg-accent-pink/90 text-white' : 'bg-black/40 text-white/70 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100'}
+                    `}
+                >
+                    <Heart size={14} className={fav ? 'fill-current' : ''} />
+                </button>
+
+                {/* Rating badge bottom-left */}
                 {item.userRating && (
-                    <span className="absolute top-2 left-2 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-black/70 text-[#ffd700]">
+                    <span className="absolute bottom-2 left-2 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-black/70 text-[#ffd700] z-10">
                         <Star size={9} fill="currentColor" />
                         {item.userRating}
                     </span>

@@ -34,6 +34,8 @@ model User {
   activities       Activity[]
   quotes           Quote[]
   submittedReports Report[]      @relation("ReportedBy")
+  favoritePeople   FavoritePerson[]
+  favoriteMedia    FavoriteMedia[]
 }
 
 model Account {
@@ -81,6 +83,7 @@ model MediaItem {
   // TMDB / External IDs
   tmdbId String?
   imdbId String?
+  rawgId String? // RAWG game ID (slug)
 
   // Media metadata
   posterUrl   String?
@@ -253,4 +256,33 @@ model Report {
 
   @@index([status])
   @@index([targetType, targetId])
+}
+
+model FavoritePerson {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tmdbPersonId       Int
+  name               String
+  profileUrl         String?
+  knownForDepartment String?
+  createdAt          DateTime @default(now())
+
+  @@unique([userId, tmdbPersonId])
+  @@index([userId])
+}
+
+model FavoriteMedia {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tmdbId      String
+  title       String
+  type        String   // MOVIE, TVSHOW, ANIME
+  posterUrl   String?
+  releaseYear Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, tmdbId])
+  @@index([userId])
 }

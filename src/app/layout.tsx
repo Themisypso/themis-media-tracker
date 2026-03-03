@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from '@/components/Providers'
 import { Toaster } from 'react-hot-toast'
+import NextTopLoader from 'nextjs-toploader'
 
 export const metadata: Metadata = {
     title: 'Themis Media Tracker',
@@ -25,6 +26,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <link rel="icon" href="/favicon.ico" />
             </head>
             <body>
+                <NextTopLoader
+                    color="#7b2fff"
+                    initialPosition={0.08}
+                    crawlSpeed={200}
+                    height={3}
+                    crawl={true}
+                    showSpinner={false}
+                    easing="ease"
+                    speed={200}
+                    shadow="0 0 10px #7b2fff,0 0 5px #7b2fff"
+                />
                 <Providers>
                     {children}
                     <Toaster

@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Navbar } from '@/components/Navbar'
 import { UserLibraryDisplay } from '@/components/UserLibraryDisplay'
-import { Globe, Lock, Twitter, Instagram, Clapperboard, CalendarDays } from 'lucide-react'
+import { Globe, Lock, Twitter, Instagram, Clapperboard, CalendarDays, Heart } from 'lucide-react'
+import Link from 'next/link'
 
 interface Props {
     params: { username: string }
@@ -24,11 +25,19 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function UserProfilePage({ params }: Props) {
-    const user = await prisma.user.findUnique({
-        where: { username: params.username } as any,
-        // @ts-ignore
+    // Try to find by username first, then fallback to id
+    let user = await prisma.user.findUnique({
+        where: { username: params.username },
         include: {
             settings: true,
+            favoritePeople: {
+                orderBy: { createdAt: 'desc' },
+                take: 12,
+            },
+            favoriteMedia: {
+                orderBy: { createdAt: 'desc' },
+                take: 12,
+            },
             _count: {
                 select: {
                     mediaItems: true,
@@ -37,7 +46,32 @@ export default async function UserProfilePage({ params }: Props) {
                 }
             }
         }
-    })
+    } as any)
+
+    // Fallback: if not found by username, try finding by user ID
+    if (!user) {
+        user = await prisma.user.findUnique({
+            where: { id: params.username },
+            include: {
+                settings: true,
+                favoritePeople: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 12,
+                },
+                favoriteMedia: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 12,
+                },
+                _count: {
+                    select: {
+                        mediaItems: true,
+                        followers: true,
+                        following: true,
+                    }
+                }
+            }
+        } as any)
+    }
 
     if (!user) notFound()
 
@@ -148,17 +182,63 @@ export default async function UserProfilePage({ params }: Props) {
                     {
                         isPublic ? (
                             <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8" >
-                                <div className="space-y-8">
-                                    <h2 className="text-2xl font-bold font-display text-text-primary flex items-center gap-2 mb-6">
-                                        <Clapperboard size={20} className="text-accent-cyan" />
-                                        Library Overview
-                                    </h2>
+                                <div className="space-y-12 min-w-0">
+                                    {/* Favorites Horizontal Scroll */}
+                                    {/* @ts-ignore */}
+                                    {((user.favoritePeople?.length ?? 0) > 0 || (user.favoriteMedia?.length ?? 0) > 0) && (
+                                        <div>
+                                            <h2 className="text-2xl font-bold font-display text-text-primary flex items-center gap-2 mb-6">
+                                                <Heart size={20} className="text-[#ff3264]" />
+                                                Favorites
+                                            </h2>
+                                            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar items-stretch snap-x">
+                                                {/* Map Media Favorites */}
+                                                {/* @ts-ignore */}
+                                                {user.favoriteMedia?.map((media: any) => (
+                                                    <Link key={media.id} href={`/media/${media.tmdbId}?type=${media.type.toLowerCase()}`} className="flex-shrink-0 w-32 group snap-start">
+                                                        <div className="aspect-[2/3] rounded-xl overflow-hidden mb-2 border border-border group-hover:border-accent-cyan transition-colors relative bg-bg-secondary">
+                                                            {media.posterUrl ? (
+                                                                <img src={media.posterUrl} alt={media.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                            ) : (
+                                                                <div className="flex items-center justify-center w-full h-full text-text-muted text-xs text-center p-2">{media.title}</div>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-cyan transition-colors">{media.title}</p>
+                                                        <p className="text-xs text-text-muted capitalize">{media.type.toLowerCase()}</p>
+                                                    </Link>
+                                                ))}
 
-                                    <UserLibraryDisplay
-                                        userId={user.id}
-                                        // @ts-ignore
-                                        hideRatings={user.settings?.hideRatings ?? false}
-                                    />
+                                                {/* Map People Favorites */}
+                                                {/* @ts-ignore */}
+                                                {user.favoritePeople?.map((person: any) => (
+                                                    <Link key={person.id} href={`/people?search=${encodeURIComponent(person.name)}`} className="flex-shrink-0 w-32 group snap-start">
+                                                        <div className="aspect-[2/3] rounded-xl overflow-hidden mb-2 border border-border group-hover:border-accent-purple transition-colors relative bg-bg-secondary">
+                                                            {person.profileUrl ? (
+                                                                <img src={person.profileUrl} alt={person.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                            ) : (
+                                                                <div className="flex items-center justify-center w-full h-full text-text-muted text-xs text-center p-2">{person.name}</div>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-purple transition-colors">{person.name}</p>
+                                                        <p className="text-xs text-text-muted">{person.knownForDepartment || 'Actor'}</p>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <h2 className="text-2xl font-bold font-display text-text-primary flex items-center gap-2 mb-6">
+                                            <Clapperboard size={20} className="text-accent-cyan" />
+                                            Library Overview
+                                        </h2>
+
+                                        <UserLibraryDisplay
+                                            userId={user.id}
+                                            // @ts-ignore
+                                            hideRatings={user.settings?.hideRatings ?? false}
+                                        />
+                                    </div>
                                 </div>
 
                                 <aside className="space-y-6">
@@ -175,6 +255,7 @@ export default async function UserProfilePage({ params }: Props) {
                                             })}
                                         </p>
                                     </div>
+
                                 </aside>
                             </div>
                         ) : (
@@ -189,7 +270,7 @@ export default async function UserProfilePage({ params }: Props) {
                             </div>
                         )}
                 </div>
-            </div >
-        </main >
+            </div>
+        </main>
     )
 }

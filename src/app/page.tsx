@@ -1,20 +1,21 @@
 import Link from 'next/link'
-import { Clapperboard, BarChart3, Clock, Star, ArrowRight, Tv, Film, Gamepad2, Check } from 'lucide-react'
+import { Clapperboard, BarChart3, Clock, Star, ArrowRight, Tv, Film, Gamepad2, Check, Users } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { prisma } from '@/lib/prisma'
 import { PosterCard } from '@/components/PosterCard'
+import { HomePeopleSection } from '@/components/HomePeopleSection'
 import { Navbar } from '@/components/Navbar'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-export const revalidate = 3600 // Cache for 1 hour, or make dynamic
+export const revalidate = 60 // Revalidate every 60 seconds
 
 import { unstable_cache } from 'next/cache'
 
 const getCachedLandingData = unstable_cache(
     async () => {
         // 1. Fire independent initial queries in parallel
-        const [trendingGroups, rawNewest, rawTop] = await Promise.all([
+        const [trendingGroups, rawNewest, rawTop, popularPeopleRes] = await Promise.all([
             prisma.mediaItem.groupBy({
                 by: ['tmdbId'],
                 _count: { tmdbId: true },
@@ -33,7 +34,11 @@ const getCachedLandingData = unstable_cache(
                 where: { tmdbId: { not: null }, tmdbRating: { gte: 8 } },
                 orderBy: { tmdbRating: 'desc' },
                 select: { id: true, tmdbId: true, title: true, type: true, posterUrl: true, status: true, totalTimeMinutes: true }
-            })
+            }),
+            fetch(
+                `https://api.themoviedb.org/3/person/popular?api_key=${process.env.TMDB_API_KEY}&language=en-US&page=1`,
+                { next: { revalidate: 3600 } }
+            ).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }))
         ])
 
         // 2. Filter newest and top items to get 8 distinct items
@@ -101,15 +106,31 @@ const getCachedLandingData = unstable_cache(
             }
         }
 
-        return { trendingItems, newestItems, topItems }
+        // 5. Normalize popular people
+        const popularPeople = ((popularPeopleRes as any).results || []).slice(0, 12).map((person: any) => ({
+            id: person.id,
+            name: person.name,
+            profileUrl: person.profile_path
+                ? `https://image.tmdb.org/t/p/w342${person.profile_path}`
+                : null,
+            knownForDepartment: person.known_for_department || 'Acting',
+            popularity: person.popularity,
+            knownFor: (person.known_for || []).slice(0, 3).map((k: any) => ({
+                title: k.title || k.name,
+                mediaType: k.media_type,
+                posterUrl: k.poster_path ? `https://image.tmdb.org/t/p/w92${k.poster_path}` : null,
+            }))
+        }))
+
+        return { trendingItems, newestItems, topItems, popularPeople }
     },
     ['landing-page-data'],
-    { revalidate: 3600, tags: ['landing-data'] }
+    { revalidate: 60, tags: ['landing-data'] }
 )
 
 export default async function LandingPage() {
     const session = await getServerSession(authOptions)
-    const { trendingItems, newestItems, topItems } = await getCachedLandingData()
+    const { trendingItems, newestItems, topItems, popularPeople } = await getCachedLandingData()
 
     return (
         <main className="min-h-screen cyber-bg">
@@ -185,7 +206,7 @@ export default async function LandingPage() {
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                             {trendingItems.map(item => (
-                                <PosterCard key={`trending-${item.id}`} item={item} href={`/media/${item.id}`} />
+                                <PosterCard key={`trending-${item.id}`} item={item} href={`/media/${item.id}?type=${item.type}`} hideStatus={true} />
                             ))}
                         </div>
                     </div>
@@ -200,7 +221,7 @@ export default async function LandingPage() {
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                             {newestItems.map(item => (
-                                <PosterCard key={`newest-${item.id}`} item={item} href={`/media/${item.id}`} />
+                                <PosterCard key={`newest-${item.id}`} item={item} href={`/media/${item.id}?type=${item.type}`} hideStatus={true} />
                             ))}
                         </div>
                     </div>
@@ -215,9 +236,26 @@ export default async function LandingPage() {
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                             {topItems.map(item => (
-                                <PosterCard key={`top-${item.id}`} item={item} href={`/media/${item.id}`} />
+                                <PosterCard key={`top-${item.id}`} item={item} href={`/media/${item.id}?type=${item.type}`} hideStatus={true} />
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {/* Popular People Section */}
+                {popularPeople.length > 0 && (
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(123,47,255,0.15)', border: '1px solid rgba(123,47,255,0.3)' }}>
+                                    <Users size={16} style={{ color: '#7b2fff' }} />
+                                </div>
+                                <h2 className="text-2xl font-display font-bold text-text-primary">Popular People</h2>
+                            </div>
+                            <Link href="/people" className="text-sm font-medium hover:underline" style={{ color: '#7b2fff' }}>View All</Link>
+                        </div>
+                        {/* Horizontal scroll row */}
+                        <HomePeopleSection people={popularPeople} />
                     </div>
                 )}
             </div>

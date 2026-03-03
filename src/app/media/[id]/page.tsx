@@ -5,25 +5,85 @@ import { Star, Clock, Film, Tv, Gamepad2, Users, ArrowLeft, ExternalLink } from 
 import Link from 'next/link'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { AddMediaClientWidget } from '@/components/AddMediaClientWidget'
+import { MediaActionPanel } from '@/components/MediaActionPanel'
+import { MediaCastCrew } from '@/components/MediaCastCrew'
 
-export default async function PublicMediaPage({ params }: { params: { id: string } }) {
+const TMDB_BASE = 'https://api.themoviedb.org/3'
+const API_KEY = process.env.TMDB_API_KEY
+
+async function getTmdbData(id: string, type: string) {
+    if (!type || (type !== 'MOVIE' && type !== 'TVSHOW' && type !== 'movie' && type !== 'tv')) return null
+    const tmdbType = (type === 'MOVIE' || type === 'movie') ? 'movie' : 'tv'
+
+    try {
+        const res = await fetch(`${TMDB_BASE}/${tmdbType}/${id}?api_key=${API_KEY}&append_to_response=credits`)
+        if (!res.ok) return null
+        return await res.json()
+    } catch {
+        return null
+    }
+}
+
+export default async function PublicMediaPage({ params, searchParams }: { params: { id: string }, searchParams: { type?: string } }) {
     const session = await getServerSession(authOptions)
 
-    // 1. Fetch the requested item
-    const baseItem = await prisma.mediaItem.findUnique({
+    // 1. First try to find it in our local database (CUID)
+    let baseItem = await prisma.mediaItem.findUnique({
         where: { id: params.id }
     })
 
-    if (!baseItem) notFound()
+    let tmdbData: any = null
+    let fetchedFromTmdb = false
 
-    // 2. Fetch global platform stats for this specific TMDB/external ID
+    // 2. If not found locally, OR if we want to enrich the local item with full cast/crew, let's fetch TMDB
+    // For this rewrite, we will always fetch TMDB if tmdbId is available, or if params.id IS the tmdbId
+    const targetTmdbId = baseItem?.tmdbId || params.id
+    const targetType = baseItem?.type || searchParams.type
+
+    if (targetTmdbId && targetType) {
+        tmdbData = await getTmdbData(targetTmdbId, targetType as string)
+    }
+
+    // 3. If neither local DB item nor TMDB data exists, 404
+    if (!baseItem && !tmdbData) {
+        notFound()
+    }
+
+    // 4. Construct unified display item
+    const displayItem = {
+        id: baseItem?.id || params.id, // For TMDB fallback, use tmdbId as local ID dummy
+        tmdbId: baseItem?.tmdbId || params.id,
+        title: baseItem?.title || tmdbData?.title || tmdbData?.name,
+        type: baseItem?.type || (searchParams.type?.toUpperCase() === 'TV' ? 'TVSHOW' : searchParams.type?.toUpperCase() || 'MOVIE'),
+        posterUrl: baseItem?.posterUrl || (tmdbData?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbData.poster_path}` : null),
+        backdropUrl: baseItem?.backdropUrl || (tmdbData?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdbData.backdrop_path}` : null),
+        releaseYear: baseItem?.releaseYear || (tmdbData?.release_date ? parseInt(tmdbData.release_date) : tmdbData?.first_air_date ? parseInt(tmdbData.first_air_date) : null),
+        overview: baseItem?.overview || tmdbData?.overview,
+        tmdbRating: baseItem?.tmdbRating || (tmdbData?.vote_average ? Math.round(tmdbData.vote_average * 10) / 10 : null),
+        runtime: baseItem?.runtime || tmdbData?.runtime || (tmdbData?.episode_run_time?.[0]),
+        genres: baseItem?.genres?.length ? baseItem.genres : (tmdbData?.genres?.map((g: any) => g.name) || []),
+        imdbId: baseItem?.imdbId || tmdbData?.imdb_id,
+        status: baseItem?.status
+    }
+
+    // 5. Check if logged-in user already tracks it (only matters if we fell back to TMDB)
+    let userMediaItem = null
+    if (session?.user?.id && displayItem.tmdbId) {
+        userMediaItem = await prisma.mediaItem.findUnique({
+            where: { userId_tmdbId: { userId: session.user.id, tmdbId: displayItem.tmdbId } }
+        })
+    }
+
+    // We pass userMediaItem as baseItem to the Add Widget if they already track it, OR the displayItem if new
+    const widgetItem = userMediaItem || displayItem
+
+    // 6. Platform stats
     let avgPlatformRating: number | null = null
-    let totalTracked = 1
+    let totalTracked = 0
 
-    if (baseItem.tmdbId) {
+    if (displayItem.tmdbId) {
         const stats = await prisma.mediaItem.aggregate({
-            where: { tmdbId: baseItem.tmdbId },
+            where: { tmdbId: displayItem.tmdbId },
             _avg: { userRating: true },
             _count: { id: true }
         })
@@ -31,34 +91,7 @@ export default async function PublicMediaPage({ params }: { params: { id: string
         totalTracked = stats._count.id
     }
 
-    // 2.5 Check if logged in user already tracks it
-    let userMediaItem = null
-    if (session?.user?.id && baseItem.tmdbId) {
-        userMediaItem = await prisma.mediaItem.findUnique({
-            where: { userId_tmdbId: { userId: session.user.id, tmdbId: baseItem.tmdbId } }
-        })
-    }
-
-    // 3. Optional: Fetch public reviews (notes from users with public profiles)
-    let publicReviews: any[] = []
-    if (baseItem.tmdbId) {
-        publicReviews = await prisma.mediaItem.findMany({
-            where: {
-                tmdbId: baseItem.tmdbId,
-                notes: { not: null },
-            },
-            take: 5,
-            orderBy: { createdAt: 'desc' },
-            select: {
-                id: true,
-                notes: true,
-                userRating: true,
-                createdAt: true,
-                user: { select: { id: true, name: true, username: true, image: true } }
-            }
-        })
-    }
-
+    // 7. Format time helper
     function formatTime(min: number | null) {
         if (!min) return null
         const h = Math.floor(min / 60)
@@ -67,163 +100,105 @@ export default async function PublicMediaPage({ params }: { params: { id: string
     }
 
     return (
-        <div className="min-h-screen cyber-bg pb-20">
+        <div className="min-h-screen bg-bg-primary pb-20">
             <Navbar />
 
             {/* Backdrop Header */}
-            <div className="relative h-[40vh] min-h-[300px] w-full mt-4">
-                {baseItem.backdropUrl ? (
+            <div className="relative h-[50vh] min-h-[400px] w-full mt-0">
+                {displayItem.backdropUrl ? (
                     <>
-                        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${baseItem.backdropUrl})` }} />
+                        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${displayItem.backdropUrl})` }} />
                         <div className="absolute inset-0 bg-gradient-to-t from-bg-primary via-bg-primary/80 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-bg-primary via-bg-primary/60 to-transparent" />
                     </>
                 ) : (
                     <div className="absolute inset-0 bg-gradient-to-b from-bg-secondary to-bg-primary" />
                 )}
             </div>
 
-            <main className="max-w-5xl mx-auto px-6 relative -mt-32">
-                <Link href="/explore" className="inline-flex items-center gap-2 text-text-secondary hover:text-text-primary mb-6 transition-colors font-medium">
-                    <ArrowLeft size={16} /> Back to Explore
-                </Link>
-
-                <div className="flex flex-col md:flex-row gap-8">
+            <main className="max-w-6xl mx-auto px-6 relative -mt-48 z-10">
+                <div className="flex flex-col md:flex-row gap-10">
                     {/* Left Column: Poster & Actions */}
-                    <div className="w-48 shrink-0 mx-auto md:mx-0">
-                        <div className="aspect-[2/3] rounded-xl overflow-hidden shadow-card border border-border bg-bg-secondary w-full">
-                            {baseItem.posterUrl ? (
-                                <img src={baseItem.posterUrl} alt={baseItem.title} className="w-full h-full object-cover" />
+                    <div className="w-64 flex-shrink-0 mx-auto md:mx-0">
+                        <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border border-border bg-bg-secondary w-full">
+                            {displayItem.posterUrl ? (
+                                <img src={displayItem.posterUrl} alt={displayItem.title} className="w-full h-full object-cover" />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                                    <Film size={32} className="text-text-muted" />
+                                    <Film size={40} className="text-text-muted" />
                                 </div>
                             )}
                         </div>
 
-                        <div className="mt-6 space-y-3">
-                            {session ? (
-                                userMediaItem ? (
-                                    <div className="w-full flex flex-col items-center justify-center py-3 text-sm font-medium rounded-xl border border-border bg-bg-card shadow-sm">
-                                        <span className="text-accent-cyan mb-1 font-bold">✓ In your Library</span>
-                                        <span className="text-xs text-text-secondary">Rating: {userMediaItem.userRating ? `★ ${userMediaItem.userRating}` : 'Unrated'}</span>
-                                    </div>
-                                ) : (
-                                    <AddMediaClientWidget baseItem={baseItem} />
-                                )
-                            ) : (
-                                <Link href={`/auth/login?callbackUrl=/media/${baseItem.id}`} className="btn-primary w-full flex items-center justify-center py-3 text-sm font-medium">
-                                    Sign In to Track
-                                </Link>
-                            )}
+                        <div className="mt-8 space-y-4">
+                            <MediaActionPanel
+                                baseItem={widgetItem}
+                                userMediaItem={userMediaItem}
+                                session={session}
+                                urlId={params.id}
+                            />
                         </div>
                     </div>
 
                     {/* Right Column: Details */}
-                    <div className="flex-1 min-w-0 pt-2 text-center md:text-left">
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-2">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium type-${baseItem.type}`}>{baseItem.type}</span>
-                            {baseItem.releaseYear && <span className="text-sm font-medium text-text-secondary">{baseItem.releaseYear}</span>}
-                            {baseItem.imdbId && (
-                                <a href={`https://www.imdb.com/title/${baseItem.imdbId}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-[#f5c518] hover:underline font-bold">
+                    <div className="flex-1 min-w-0 pt-6 md:pt-16 text-center md:text-left">
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4">
+                            <span className={`text-xs px-3 py-1 rounded-full font-bold tracking-widest uppercase bg-bg-secondary border border-border`}>{displayItem.type}</span>
+                            {displayItem.releaseYear && <span className="text-sm font-medium text-[#8899aa]">{displayItem.releaseYear}</span>}
+                            {displayItem.imdbId && (
+                                <a href={`https://www.imdb.com/title/${displayItem.imdbId}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-[#f5c518] hover:bg-[#f5c518]/10 px-2 py-1 rounded-md transition-colors font-bold border border-[#f5c518]/30">
                                     <ExternalLink size={12} /> IMDb
                                 </a>
                             )}
                         </div>
 
-                        <h1 className="text-3xl md:text-5xl font-display font-bold text-text-primary mb-6">{baseItem.title}</h1>
+                        <h1 className="text-4xl md:text-6xl font-display font-extrabold text-[#e8edf5] mb-6 drop-shadow-md tracking-tight leading-tight">{displayItem.title}</h1>
 
                         {/* Stats Row */}
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-8">
-                            {baseItem.tmdbRating && (
-                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-card border border-border text-sm">
-                                    <Star size={14} className="text-[#ffd700]" fill="currentColor" />
-                                    <span className="font-bold text-text-primary">{baseItem.tmdbRating}</span>
-                                    <span className="text-text-muted text-xs">TMDB</span>
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-10">
+                            {displayItem.tmdbRating && (
+                                <div className="flex items-center gap-2">
+                                    <Star size={18} className="text-[#ffd700]" fill="currentColor" />
+                                    <span className="font-bold text-lg text-[#e8edf5]">{displayItem.tmdbRating} <span className="text-sm text-[#8899aa] font-normal">TMDB</span></span>
                                 </div>
                             )}
-                            {avgPlatformRating && (
-                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ffd700]/10 border border-[#ffd700]/30 text-sm">
-                                    <Star size={14} className="text-[#ffd700]" fill="currentColor" />
-                                    <span className="font-bold text-[#ffd700]">{avgPlatformRating}</span>
-                                    <span className="text-[#ffd700]/70 text-xs">Platform</span>
-                                </div>
-                            )}
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-card border border-border text-sm text-text-secondary">
-                                <Users size={14} />
-                                <span className="font-medium text-text-primary">{totalTracked}</span> tracking
+
+                            <div className="w-1.5 h-1.5 rounded-full bg-border md:block hidden" />
+
+                            <div className="flex items-center gap-2">
+                                <Users size={16} className="text-[#8899aa]" />
+                                <span className="font-medium text-[#e8edf5]">{totalTracked} <span className="text-sm text-[#8899aa]">Trackers</span></span>
                             </div>
-                            {baseItem.runtime && (
-                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-card border border-border text-sm text-text-secondary">
-                                    <Clock size={14} />
-                                    <span className="font-medium text-text-primary">{formatTime(baseItem.runtime)}</span>
-                                </div>
+
+                            {displayItem.runtime && (
+                                <>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-border md:block hidden" />
+                                    <div className="flex items-center gap-2 text-[#8899aa]">
+                                        <Clock size={16} />
+                                        <span className="font-medium">{formatTime(displayItem.runtime)}</span>
+                                    </div>
+                                </>
                             )}
                         </div>
 
-                        {/* Genres */}
-                        {baseItem.genres && baseItem.genres.length > 0 && (
-                            <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-8">
-                                {baseItem.genres.map(g => (
-                                    <span key={g} className="text-xs px-3 py-1 rounded-full bg-bg-hover text-text-secondary border border-border">{g}</span>
+                        {displayItem.genres && displayItem.genres.length > 0 && (
+                            <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-10">
+                                {displayItem.genres.map((g: any) => (
+                                    <span key={typeof g === 'string' ? g : g.name} className="text-xs font-medium px-4 py-1.5 rounded-full bg-bg-card text-[#8899aa] border border-border shadow-sm">{typeof g === 'string' ? g : g.name}</span>
                                 ))}
                             </div>
                         )}
 
                         {/* Overview */}
-                        {baseItem.overview && (
-                            <div className="mb-12">
-                                <h3 className="text-lg font-display font-semibold text-text-primary mb-3">Overview</h3>
-                                <p className="text-text-secondary leading-relaxed max-w-3xl">{baseItem.overview}</p>
+                        {displayItem.overview && (
+                            <div className="mb-14">
+                                <h3 className="text-xl font-display font-bold text-[#e8edf5] mb-4">Synopsis</h3>
+                                <p className="text-[#8899aa] leading-relaxed max-w-4xl text-lg">{displayItem.overview}</p>
                             </div>
                         )}
 
-                        {/* Reviews (Read Only) */}
-                        <div className="mb-12">
-                            <h3 className="text-lg font-display font-semibold text-text-primary mb-4 flex items-center gap-2">
-                                Recent Reviews
-                                <span className="text-xs py-0.5 px-2 rounded-full bg-bg-hover text-text-secondary font-normal border border-border">{publicReviews.length}</span>
-                            </h3>
-
-                            {publicReviews.length > 0 ? (
-                                <div className="grid gap-4 max-w-3xl">
-                                    {publicReviews.map(review => (
-                                        <div key={review.id} className="p-4 rounded-xl bg-bg-card border border-border">
-                                            <div className="flex items-start justify-between mb-3">
-                                                <Link href={`/user/${review.user.username || review.user.id}`} className="flex items-center gap-3 group">
-                                                    {review.user.image ? (
-                                                        <img src={review.user.image} alt={review.user.name || 'User'} className="w-8 h-8 rounded-full border border-border group-hover:border-accent-cyan transition-colors" />
-                                                    ) : (
-                                                        <div className="w-8 h-8 rounded-full bg-bg-hover border border-border group-hover:border-accent-cyan transition-colors flex items-center justify-center">
-                                                            <span className="text-xs font-bold text-text-secondary">{(review.user.name || 'U').charAt(0)}</span>
-                                                        </div>
-                                                    )}
-                                                    <div>
-                                                        <p className="text-sm font-bold text-text-primary group-hover:text-accent-cyan transition-colors">{review.user.name || 'Anonymous User'}</p>
-                                                        <p className="text-[10px] text-text-muted">{review.user.username ? `@${review.user.username}` : new Date(review.createdAt).toLocaleDateString()}</p>
-                                                    </div>
-                                                </Link>
-                                                {review.userRating && (
-                                                    <div className="flex items-center gap-1 text-[#ffd700] text-sm bg-black/40 px-2 py-1 rounded-lg">
-                                                        <Star size={12} fill="currentColor" />
-                                                        <span className="font-bold">{review.userRating}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">{review.notes}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="p-8 text-center glass-card border border-border rounded-xl">
-                                    <p className="text-text-muted mb-2">No public reviews yet.</p>
-                                    {!session && (
-                                        <Link href={`/auth/login?callbackUrl=/media/${baseItem.id}`} className="text-sm text-accent-cyan hover:underline">
-                                            Log in to write the first review
-                                        </Link>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                        {/* Cast & Crew Section */}
+                        <MediaCastCrew credits={tmdbData?.credits} type={displayItem.type} />
                     </div>
                 </div>
             </main>

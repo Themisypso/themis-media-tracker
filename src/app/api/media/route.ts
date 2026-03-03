@@ -3,14 +3,16 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { revalidateTag } from 'next/cache'
 import { z } from 'zod'
 
 const mediaSchema = z.object({
     title: z.string().min(1),
-    type: z.enum(['ANIME', 'MOVIE', 'TVSHOW', 'GAME']),
+    type: z.enum(['ANIME', 'MOVIE', 'TVSHOW', 'GAME', 'BOOK']),
     status: z.enum(['WATCHING', 'COMPLETED', 'PLANNED', 'DROPPED']).default('PLANNED'),
     tmdbId: z.string().optional().nullable(),
     imdbId: z.string().optional().nullable(),
+    rawgId: z.string().optional().nullable(),
     posterUrl: z.string().optional().nullable(),
     backdropUrl: z.string().optional().nullable(),
     genres: z.array(z.string()).optional().default([]),
@@ -86,8 +88,13 @@ export async function POST(req: Request) {
                 userId: session.user.id,
                 totalTimeMinutes,
                 genres: data.genres ?? [],
+                // @ts-ignore — rawgId added to schema; Prisma types refresh on next generate
+                rawgId: (data as any).rawgId ?? null,
             },
         })
+
+        // Invalidate homepage cache so new items appear immediately
+        revalidateTag('landing-data')
 
         return NextResponse.json({ item }, { status: 201 })
     } catch (error) {
