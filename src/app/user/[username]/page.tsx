@@ -2,22 +2,22 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Navbar } from '@/components/Navbar'
 import { UserLibraryDisplay } from '@/components/UserLibraryDisplay'
-import { Globe, Lock, Code, Twitter, Instagram, Clapperboard, CalendarDays } from 'lucide-react'
+import { Globe, Lock, Twitter, Instagram, Clapperboard, CalendarDays } from 'lucide-react'
 
 interface Props {
-    params: { id: string }
+    params: { username: string }
 }
 
 export async function generateMetadata({ params }: Props) {
     const user = await prisma.user.findUnique({
-        where: { id: params.id },
+        where: { username: params.username } as any,
         // @ts-ignore
         include: { settings: true }
     })
     if (!user) return { title: 'User Not Found' }
     return {
         // @ts-ignore
-        title: `${user.name || user.email?.split('@')[0]} - Themis Media Tracker`,
+        title: `${user.name || user.username} - Themis Media Tracker`,
         // @ts-ignore
         description: user.settings?.bio || 'Check out my media library on Themis Media Tracker!'
     }
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function UserProfilePage({ params }: Props) {
     const user = await prisma.user.findUnique({
-        where: { id: params.id },
+        where: { username: params.username } as any,
         // @ts-ignore
         include: {
             settings: true,
@@ -52,7 +52,6 @@ export default async function UserProfilePage({ params }: Props) {
 
                 {/* Header Profile Section */}
                 <div className="glass-card p-8 rounded-3xl border border-border shadow-card flex flex-col md:flex-row gap-8 items-center md:items-start relative overflow-hidden">
-                    {/* Decorative Background Blur */}
                     <div className="absolute -top-32 -right-32 w-64 h-64 bg-accent-purple/20 blur-[100px] rounded-full pointer-events-none" />
 
                     {/* Avatar */}
@@ -61,16 +60,16 @@ export default async function UserProfilePage({ params }: Props) {
                             <img src={user.image} alt={user.name || 'User'} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-4xl font-bold bg-gradient-to-br from-accent-cyan to-accent-purple text-white">
-                                {user.name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
+                                {user.name?.[0]?.toUpperCase() || (user as any).username?.[0]?.toUpperCase()}
                             </div>
                         )}
                     </div>
 
                     {/* Info */}
                     <div className="flex-1 text-center md:text-left z-10">
-                        <div className="flex flex-col md:flex-row items-center gap-4 mb-2">
+                        <div className="flex flex-col md:flex-row items-center gap-4 mb-1">
                             <h1 className="text-3xl md:text-4xl font-display font-extrabold text-text-primary">
-                                {user.name || user.email?.split('@')[0]}
+                                {user.name || (user as any).username}
                             </h1>
                             {!isPublic && (
                                 <span className="flex items-center gap-1.5 px-3 py-1 bg-bg-secondary border border-border rounded-full text-xs font-medium text-text-secondary">
@@ -79,6 +78,7 @@ export default async function UserProfilePage({ params }: Props) {
                                 </span>
                             )}
                         </div>
+                        <p className="text-text-muted text-sm mb-4">@{(user as any).username}</p>
 
                         {/* Bio */}
                         {/* @ts-ignore */}
@@ -184,7 +184,7 @@ export default async function UserProfilePage({ params }: Props) {
                                 </div>
                                 <h2 className="text-2xl font-bold font-display text-text-primary mb-2">This profile is private</h2>
                                 <p className="text-text-secondary max-w-md">
-                                    {user.name || user.email?.split('@')[0]} has chosen to keep their library and activity private.
+                                    {user.name || (user as any).username} has chosen to keep their library and activity private.
                                 </p>
                             </div>
                         )}

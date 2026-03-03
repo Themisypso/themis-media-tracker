@@ -54,7 +54,7 @@ export default async function PublicMediaPage({ params }: { params: { id: string
                 notes: true,
                 userRating: true,
                 createdAt: true,
-                user: { select: { name: true, image: true } }
+                user: { select: { id: true, name: true, username: true, image: true } }
             }
         })
     }
@@ -189,19 +189,19 @@ export default async function PublicMediaPage({ params }: { params: { id: string
                                     {publicReviews.map(review => (
                                         <div key={review.id} className="p-4 rounded-xl bg-bg-card border border-border">
                                             <div className="flex items-start justify-between mb-3">
-                                                <div className="flex items-center gap-3">
+                                                <Link href={`/user/${review.user.username || review.user.id}`} className="flex items-center gap-3 group">
                                                     {review.user.image ? (
-                                                        <img src={review.user.image} alt={review.user.name || 'User'} className="w-8 h-8 rounded-full border border-border" />
+                                                        <img src={review.user.image} alt={review.user.name || 'User'} className="w-8 h-8 rounded-full border border-border group-hover:border-accent-cyan transition-colors" />
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-full bg-bg-hover border border-border flex items-center justify-center">
+                                                        <div className="w-8 h-8 rounded-full bg-bg-hover border border-border group-hover:border-accent-cyan transition-colors flex items-center justify-center">
                                                             <span className="text-xs font-bold text-text-secondary">{(review.user.name || 'U').charAt(0)}</span>
                                                         </div>
                                                     )}
                                                     <div>
-                                                        <p className="text-sm font-bold text-text-primary">{review.user.name || 'Anonymous User'}</p>
-                                                        <p className="text-[10px] text-text-muted">{new Date(review.createdAt).toLocaleDateString()}</p>
+                                                        <p className="text-sm font-bold text-text-primary group-hover:text-accent-cyan transition-colors">{review.user.name || 'Anonymous User'}</p>
+                                                        <p className="text-[10px] text-text-muted">{review.user.username ? `@${review.user.username}` : new Date(review.createdAt).toLocaleDateString()}</p>
                                                     </div>
-                                                </div>
+                                                </Link>
                                                 {review.userRating && (
                                                     <div className="flex items-center gap-1 text-[#ffd700] text-sm bg-black/40 px-2 py-1 rounded-lg">
                                                         <Star size={12} fill="currentColor" />

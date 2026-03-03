@@ -53,22 +53,35 @@ export const authOptions: NextAuthOptions = {
     pages: {
         signIn: '/auth/login',
         error: '/auth/error',
-        newUser: '/dashboard',
+        newUser: '/auth/setup-username',
     },
     callbacks: {
+        async redirect({ url, baseUrl }) {
+            // Allow relative URLs
+            if (url.startsWith('/')) return `${baseUrl}${url}`
+            // Allow same-origin URLs
+            if (new URL(url).origin === baseUrl) return url
+            return baseUrl
+        },
         async jwt({ token, user, trigger, session }) {
             if (user) {
                 token.id = user.id
                 token.role = user.role
                 token.image = user.image
                 token.name = user.name
-                token.username = (user as any).username // Passed from db
+                token.username = (user as any).username
+                // Mark if this is a new Google user with no username
+                token.needsUsername = !(user as any).username
             }
             if (trigger === 'update' && session?.image) {
                 token.image = session.image
             }
             if (trigger === 'update' && session?.name) {
                 token.name = session.name
+            }
+            if (trigger === 'update' && session?.username !== undefined) {
+                token.username = session.username
+                token.needsUsername = false
             }
             return token
         },
@@ -79,30 +92,20 @@ export const authOptions: NextAuthOptions = {
                 session.user.image = token.image as string | undefined
                 session.user.name = token.name as string | undefined
                     ; (session.user as any).username = token.username as string | undefined
+                    ; (session.user as any).needsUsername = token.needsUsername as boolean | undefined
             }
             return session
         },
     },
     events: {
         async signIn({ user, account }) {
-            // Update user image from Google if not set, and generate a missing username
-            if (account?.provider === 'google') {
-                const existingUser = await prisma.user.findUnique({ where: { id: user.id } })
-
-                const updates: any = {}
-                if (user.image && !existingUser?.image) {
-                    updates.image = user.image
-                }
-                if (!existingUser?.username) {
-                    const baseName = (user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 15)
-                    const randomNum = Math.floor(1000 + Math.random() * 9000)
-                    updates.username = `${baseName}_${randomNum}`
-                }
-
-                if (Object.keys(updates).length > 0) {
+            // Update user image from Google if not already set
+            if (account?.provider === 'google' && user.image) {
+                const existingUser = await prisma.user.findUnique({ where: { id: user.id }, select: { image: true } })
+                if (!existingUser?.image) {
                     await prisma.user.update({
                         where: { id: user.id },
-                        data: updates,
+                        data: { image: user.image },
                     }).catch(() => { })
                 }
             }

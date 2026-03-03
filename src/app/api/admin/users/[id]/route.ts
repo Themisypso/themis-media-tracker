@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 export async function PATCH(
     req: Request,
@@ -15,19 +16,42 @@ export async function PATCH(
         }
 
         const body = await req.json();
-        const { role } = body;
+        const { role, username, name, newPassword } = body;
 
-        if (!role || (role !== "USER" && role !== "ADMIN")) {
-            return new NextResponse("Invalid role", { status: 400 });
+        const updateData: any = {};
+
+        if (role) {
+            if (!["USER", "ADMIN", "MODERATOR", "SUPERADMIN"].includes(role)) {
+                return new NextResponse("Invalid role", { status: 400 });
+            }
+            updateData.role = role;
+        }
+
+        if (name !== undefined) {
+            updateData.name = name;
+        }
+
+        if (username !== undefined) {
+            // Check uniqueness
+            const existing = await prisma.user.findFirst({
+                where: { username, NOT: { id: params.id } }
+            });
+            if (existing) {
+                return NextResponse.json({ error: "Username already taken" }, { status: 409 });
+            }
+            updateData.username = username;
+        }
+
+        if (newPassword) {
+            if (newPassword.length < 8) {
+                return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+            }
+            updateData.password = await bcrypt.hash(newPassword, 12);
         }
 
         const user = await prisma.user.update({
-            where: {
-                id: params.id,
-            },
-            data: {
-                role,
-            },
+            where: { id: params.id },
+            data: updateData,
         });
 
         return NextResponse.json(user);
@@ -36,6 +60,7 @@ export async function PATCH(
         return new NextResponse("Internal Error", { status: 500 });
     }
 }
+
 
 export async function DELETE(
     req: Request,
