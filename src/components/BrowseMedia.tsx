@@ -261,14 +261,14 @@ export function BrowseMedia({ type, title, description, baseFilters }: BrowseMed
                 )}
 
                 {!loading && items.length === 0 && (
-                    <div className="py-24 text-center glass-card rounded-2xl border border-border max-w-md mx-auto">
-                        <Search size={40} className="text-[#4a5568] mx-auto mb-3" />
-                        <h3 className="text-xl font-bold text-[#e8edf5]">No results found</h3>
-                        <p className="text-sm text-[#8899aa] mt-2"><p className="text-sm text-[#8899aa] mt-2">
-  Try adjusting your filters to find what you&apos;re looking for.
-</p>
-                    </div>
-                )}
+ 		 <div className="py-24 text-center glass-card rounded-2xl border border-border max-w-md mx-auto">
+   		 <Search size={40} className="text-[#4a5568] mx-auto mb-3" />
+   		 <h3 className="text-xl font-bold text-[#e8edf5]">No results found</h3>
+   		 <p className="text-sm text-[#8899aa] mt-2">
+    		  Try adjusting your filters to find what you&apos;re looking for.
+   		 </p>
+ 		 </div>
+		)}
 
                 {!loading && !hasMore && items.length > 0 && (
                     <div className="py-12 text-center text-text-muted text-sm">
