@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Loader2, Film, Tv, Gamepad2 } from 'lucide-react'
+import { Search, Loader2, Film, Tv, Gamepad2, BookOpen, User } from 'lucide-react'
 import Image from 'next/image'
 
 interface SearchResult {
@@ -26,11 +26,16 @@ const typeIcons: Record<string, React.ReactNode> = {
     movie: <Film size={12} />,
     tv: <Tv size={12} />,
     game: <Gamepad2 size={12} />,
+    book: <BookOpen size={12} />,
+    person: <User size={12} />
 }
 
 const typeLabels: Record<string, string> = {
     movie: 'Movie',
     tv: 'TV Show',
+    book: 'Book',
+    game: 'Game',
+    person: 'Person'
 }
 
 export function SearchBar({ onSelect, placeholder = 'Search anime, movies, shows...', className = '', navigateOnSelect = false }: SearchBarProps) {
@@ -75,7 +80,11 @@ export function SearchBar({ onSelect, placeholder = 'Search anime, movies, shows
     function handleSelect(result: SearchResult) {
         if (onSelect) onSelect(result)
         if (navigateOnSelect) {
-            router.push(`/search?select=${result.id}&type=${result.mediaType}`)
+            if (result.mediaType === 'person') {
+                router.push(`/person/${result.id}`)
+            } else {
+                router.push(`/search?select=${result.id}&type=${result.mediaType}`)
+            }
         }
         setOpen(false)
         setQuery('')

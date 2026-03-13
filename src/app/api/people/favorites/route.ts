@@ -33,6 +33,17 @@ export async function POST(req: Request) {
             create: { userId: session.user.id, tmdbPersonId: Number(tmdbPersonId), name, profileUrl: profileUrl || null, knownForDepartment: knownForDepartment || null },
             update: {},
         })
+
+        // Log activity
+        prisma.activity.create({
+            data: {
+                userId: session.user.id,
+                type: 'FAVORITED_PERSON',
+                referenceId: String(tmdbPersonId),
+                content: `Added ${name} to favorites`,
+            }
+        }).catch(e => console.error('[ACTIVITY ERROR]', e))
+
         return NextResponse.json(favorite)
     } catch (error) {
         console.error('[FAVORITE_PERSON_POST]', error)

@@ -4,14 +4,42 @@ import GoogleProvider from 'next-auth/providers/google'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import SteamProvider from 'next-auth-steam'
+import { NextRequest } from 'next/server'
+import { DefaultSession } from 'next-auth'
+
+declare module 'next-auth' {
+    interface Session {
+        user: {
+            id: string
+            role: string
+            steamId?: string
+            username?: string
+            needsUsername?: boolean
+        } & DefaultSession['user']
+    }
+    interface User {
+        role?: string
+        username?: string
+        steamId?: string
+    }
+}
 
 export const authOptions: NextAuthOptions = {
+    debug: true,
     // @ts-ignore
     adapter: PrismaAdapter(prisma),
     providers: [
         GoogleProvider({
             clientId: process.env.GOOGLE_CLIENT_ID ?? '',
             clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+        }),
+        SteamProvider({
+            // Note: url is required here but will be overridden by the dynamic injection in route.ts
+            url: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+        } as any, {
+            clientSecret: process.env.STEAM_API_KEY ?? '',
+            callbackUrl: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/callback/steam`,
         }),
         CredentialsProvider({
             name: 'credentials',
@@ -57,13 +85,28 @@ export const authOptions: NextAuthOptions = {
     },
     callbacks: {
         async redirect({ url, baseUrl }) {
-            // Allow relative URLs
+            console.log('[AUTH] redirect callback', { url, baseUrl })
             if (url.startsWith('/')) return `${baseUrl}${url}`
-            // Allow same-origin URLs
             if (new URL(url).origin === baseUrl) return url
             return baseUrl
         },
-        async jwt({ token, user, trigger, session }) {
+        async signIn({ user, account, profile }: any) {
+            console.log('[AUTH] signIn callback', { provider: account?.provider, userId: user?.id })
+            // Determine Steam ID if logging in with Steam
+            if (account?.provider === 'steam') {
+                // Extract Steam ID from OpenID identity
+                const steamId = profile?.steamid || user.id
+                if (steamId && user.id) {
+                    // We must ensure the user model is updated with this steamId
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: { steamId } as any,
+                    }).catch(() => { })
+                }
+            }
+            return true
+        },
+        async jwt({ token, user, trigger, session, account }) {
             if (user) {
                 token.id = user.id
                 token.role = user.role
@@ -99,7 +142,6 @@ export const authOptions: NextAuthOptions = {
     },
     events: {
         async signIn({ user, account }) {
-            // Update user image from Google if not already set
             if (account?.provider === 'google' && user.image) {
                 const existingUser = await prisma.user.findUnique({ where: { id: user.id }, select: { image: true } })
                 if (!existingUser?.image) {

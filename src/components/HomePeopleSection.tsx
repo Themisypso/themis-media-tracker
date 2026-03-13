@@ -13,9 +13,9 @@ export function HomePeopleSection({ people }: HomePeopleSectionProps) {
 
     return (
         <>
-            <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: 'none' }}>
-                {people.map((person) => (
-                    <div key={person.id} className="flex-none w-32 sm:w-36">
+            <div className="flex gap-4 overflow-x-auto pb-3 items-end" style={{ scrollbarWidth: 'none' }}>
+                {people.map((person, idx) => (
+                    <div key={person.id} className={`flex-none ${idx === 0 ? 'w-40 sm:w-44' : 'w-32 sm:w-36'} transition-all`}>
                         <div onClick={() => setSelectedPersonId(person.id)} className="cursor-pointer">
                             <PersonCard person={person} />
                         </div>

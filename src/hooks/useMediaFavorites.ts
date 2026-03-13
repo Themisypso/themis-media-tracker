@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 
-// Global cache to prevent multiple fetches across components
+// Module-level shared cache — deduplicates fetches across components on the same session
 let globalFavorites: Set<string> | null = null
+let cachedUserId: string | null = null
 let fetchPromise: Promise<void> | null = null
 const listeners = new Set<() => void>()
 
@@ -12,14 +13,29 @@ function notifyListeners() {
     listeners.forEach(l => l())
 }
 
+function clearGlobalCache() {
+    globalFavorites = null
+    cachedUserId = null
+    fetchPromise = null
+}
+
 export function useMediaFavorites() {
     const { data: session } = useSession()
     const [favorites, setFavorites] = useState<Set<string>>(globalFavorites || new Set())
 
     useEffect(() => {
-        if (!session?.user) return
+        const userId = session?.user?.id
+
+        // If there is no user, or the logged-in user changed, clear stale cache
+        if (!userId || (cachedUserId && cachedUserId !== userId)) {
+            clearGlobalCache()
+            setFavorites(new Set())
+        }
+
+        if (!userId) return
 
         if (!globalFavorites) {
+            cachedUserId = userId
             if (!fetchPromise) {
                 fetchPromise = fetch('/api/media/favorites')
                     .then(res => res.json())
@@ -29,9 +45,7 @@ export function useMediaFavorites() {
                         notifyListeners()
                     })
                     .catch(console.error)
-                    .finally(() => {
-                        fetchPromise = null
-                    })
+                    .finally(() => { fetchPromise = null })
             }
         } else {
             setFavorites(globalFavorites)
@@ -40,9 +54,15 @@ export function useMediaFavorites() {
         const listener = () => setFavorites(new Set(globalFavorites))
         listeners.add(listener)
         return () => { listeners.delete(listener) }
-    }, [session])
+    }, [session?.user?.id])
 
-    const toggleFavorite = async (item: { tmdbId: string, title: string, type: string, posterUrl: string | null, releaseYear: number | null }) => {
+    const toggleFavorite = async (item: {
+        tmdbId: string
+        title: string
+        type: string
+        posterUrl: string | null
+        releaseYear: number | null
+    }) => {
         if (!session?.user || !globalFavorites) return
 
         const isFav = globalFavorites.has(item.tmdbId)

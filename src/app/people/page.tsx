@@ -18,7 +18,7 @@ const DEPARTMENTS = [
     { id: 'Camera', label: '📷 Camera' },
 ]
 
-const PAGES_TO_FETCH = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+const PAGES_TO_FETCH = Array.from({ length: 20 }, (_, i) => String(i + 1))
 
 const deptColor: Record<string, string> = {
     Acting: '#00d4ff',
@@ -74,11 +74,12 @@ export default async function PeoplePage({
     // Fetch people from TMDB (fetch multiple pages if filtering by dept)
     let people: any[] = []
     if (dept !== 'all') {
-        // Fetch 3 pages to get enough results after filtering
+        // Fetch 20 pages to get enough results after filtering by department
         const results = await Promise.all(
             PAGES_TO_FETCH.map(p => getPeople(dept, Number(p)))
         )
-        people = results.flat().slice(0, 80)
+        // No slice cap — return all found (up to 400 before filter, typically 30–120 after)
+        people = results.flat()
     } else {
         people = await getPeople('all', page)
     }

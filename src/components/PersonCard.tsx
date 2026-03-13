@@ -2,6 +2,8 @@
 
 import { User, Clapperboard, Tv, Heart } from 'lucide-react'
 import Link from 'next/link'
+import { GlassCard } from '@/components/GlassCard'
+
 import { usePersonFavorites } from '@/hooks/usePersonFavorites'
 
 export interface Person {
@@ -16,6 +18,7 @@ export interface Person {
 interface PersonCardProps {
     person: Person
     href?: string
+    onClick?: () => void
 }
 
 const deptColor: Record<string, string> = {
@@ -27,13 +30,17 @@ const deptColor: Record<string, string> = {
     'Crew': '#a78bfa',
 }
 
-export function PersonCard({ person, href }: PersonCardProps) {
+export function PersonCard({ person, href, onClick }: PersonCardProps) {
     const color = deptColor[person.knownForDepartment] || '#8899aa'
     const { isFavorited, toggleFavorite } = usePersonFavorites()
     const fav = isFavorited(person.id)
 
     const cardContent = (
-        <div className="group relative cursor-pointer rounded-xl overflow-hidden border border-border hover:border-border-bright transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover bg-bg-card">
+        <GlassCard
+            interactive
+            className="group border-border hover:border-border-bright flex flex-col h-full cursor-pointer"
+            onClick={onClick}
+        >
             {/* Profile Image */}
             <div className="relative aspect-[2/3] overflow-hidden bg-bg-secondary">
                 {person.profileUrl ? (
@@ -112,7 +119,7 @@ export function PersonCard({ person, href }: PersonCardProps) {
                     <span className="text-[9px]" style={{ color }}>{person.knownForDepartment}</span>
                 </div>
             </div>
-        </div>
+        </GlassCard>
     )
 
     if (href) {

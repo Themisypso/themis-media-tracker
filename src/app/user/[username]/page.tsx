@@ -1,276 +1,264 @@
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Navbar } from '@/components/Navbar'
-import { UserLibraryDisplay } from '@/components/UserLibraryDisplay'
-import { Globe, Lock, Twitter, Instagram, Clapperboard, CalendarDays, Heart } from 'lucide-react'
+import { ProfileTabs } from '@/components/ProfileTabs'
+import { Globe, Lock, Twitter, Instagram, CalendarDays } from 'lucide-react'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { FollowButton } from '@/components/FollowButton'
+import { FriendButton, FriendStatus } from '@/components/FriendButton'
 import Link from 'next/link'
 
 interface Props {
     params: { username: string }
 }
 
-export async function generateMetadata({ params }: Props) {
-    const user = await prisma.user.findUnique({
-        where: { username: params.username } as any,
+// React.cache deduplicates this call — generateMetadata and the page
+// component both call this function but it only runs one DB query per render.
+const getUser = cache(async (slug: string) => {
+    return prisma.user.findFirst({
         // @ts-ignore
-        include: { settings: true }
+        where: { OR: [{ username: slug }, { id: slug }] },
+        include: {
+            settings: true,
+            quotes: { orderBy: { createdAt: 'desc' }, take: 15, include: { media: true, user: { select: { username: true, name: true, image: true } }, likes: true, _count: { select: { likes: true, comments: true } } } },
+            favoritePeople: { orderBy: { createdAt: 'desc' }, take: 20 },
+            favoriteMedia: { orderBy: { createdAt: 'desc' }, take: 20 },
+            lists: {
+                where: { isPublic: true },
+                orderBy: { updatedAt: 'desc' },
+                include: {
+                    user: { select: { username: true, name: true, image: true } },
+                    items: { take: 4, orderBy: { order: 'asc' } },
+                    _count: { select: { items: true, likes: true } }
+                }
+            },
+            _count: { select: { mediaItems: true, followers: true, following: true } }
+        }
     })
+})
+
+export async function generateMetadata({ params }: Props) {
+    const user = await getUser(params.username)
     if (!user) return { title: 'User Not Found' }
+    const userObj = user as any;
     return {
-        // @ts-ignore
-        title: `${user.name || user.username} - Themis Media Tracker`,
-        // @ts-ignore
-        description: user.settings?.bio || 'Check out my media library on Themis Media Tracker!'
+        title: `${userObj.name || userObj.username} - Themis`,
+        description: userObj.settings?.bio || 'Check out my media library on Themis!'
     }
 }
 
 export default async function UserProfilePage({ params }: Props) {
-    // Try to find by username first, then fallback to id
-    let user = await prisma.user.findUnique({
-        where: { username: params.username },
-        include: {
-            settings: true,
-            favoritePeople: {
-                orderBy: { createdAt: 'desc' },
-                take: 12,
-            },
-            favoriteMedia: {
-                orderBy: { createdAt: 'desc' },
-                take: 12,
-            },
-            _count: {
-                select: {
-                    mediaItems: true,
-                    followers: true,
-                    following: true,
-                }
-            }
-        }
-    } as any)
-
-    // Fallback: if not found by username, try finding by user ID
-    if (!user) {
-        user = await prisma.user.findUnique({
-            where: { id: params.username },
-            include: {
-                settings: true,
-                favoritePeople: {
-                    orderBy: { createdAt: 'desc' },
-                    take: 12,
-                },
-                favoriteMedia: {
-                    orderBy: { createdAt: 'desc' },
-                    take: 12,
-                },
-                _count: {
-                    select: {
-                        mediaItems: true,
-                        followers: true,
-                        following: true,
-                    }
-                }
-            }
-        } as any)
-    }
-
+    const user = await getUser(params.username)
     if (!user) notFound()
 
-    // @ts-ignore
-    const isPublic = user.settings?.isPublic !== false // default true
+    const session = await getServerSession(authOptions)
+    let isFollowing = false
+    let friendStatus: FriendStatus = 'NOT_FRIENDS'
+
+    if (session?.user?.id && user.id !== session.user.id) {
+        // Follow status
+        const follow = await prisma.follows.findUnique({
+            where: {
+                followerId_followingId: {
+                    followerId: session.user.id,
+                    followingId: user.id
+                }
+            }
+        })
+        isFollowing = !!follow
+
+        // Friend status
+        const friendship = await prisma.friendship.findFirst({
+            where: {
+                OR: [
+                    { user1Id: session.user.id, user2Id: user.id },
+                    { user1Id: user.id, user2Id: session.user.id }
+                ]
+            }
+        })
+        if (friendship) {
+            friendStatus = 'FRIENDS'
+        } else {
+            const req = await prisma.friendRequest.findFirst({
+                where: {
+                    OR: [
+                        { senderId: session.user.id, receiverId: user.id },
+                        { senderId: user.id, receiverId: session.user.id }
+                    ],
+                    status: 'PENDING'
+                }
+            })
+            if (req) friendStatus = req.senderId === session.user.id ? 'PENDING_SENT' : 'PENDING_RECEIVED'
+        }
+    }
+
+    const userObj = user as any;
+    const isPublic = userObj.settings?.isPublic !== false
+
+    const allMediaItems = isPublic ? await prisma.mediaItem.findMany({
+        where: { userId: userObj.id },
+        select: {
+            id: true, title: true, type: true, status: true,
+            posterUrl: true, releaseYear: true, tmdbId: true,
+            rawgId: true,
+            bookId: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+    }) : []
 
     return (
-        <main className="min-h-screen cyber-bg">
+        <div className="min-h-screen bg-bg-primary">
             <Navbar />
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fade-in mt-16">
+            <div className="relative">
+                {/* Cover Area */}
+                <div className="h-48 md:h-64 w-full bg-gradient-to-br from-accent-purple/20 via-bg-secondary to-accent-cyan/20 relative overflow-hidden">
+                    <div className="absolute inset-0 backdrop-blur-3xl" />
+                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
 
-                {/* Header Profile Section */}
-                <div className="glass-card p-8 rounded-3xl border border-border shadow-card flex flex-col md:flex-row gap-8 items-center md:items-start relative overflow-hidden">
-                    <div className="absolute -top-32 -right-32 w-64 h-64 bg-accent-purple/20 blur-[100px] rounded-full pointer-events-none" />
-
-                    {/* Avatar */}
-                    <div className="w-32 h-32 md:w-40 md:h-40 flex-shrink-0 rounded-full border-4 border-bg-card shadow-xl overflow-hidden bg-bg-secondary relative z-10">
-                        {user.image ? (
-                            <img src={user.image} alt={user.name || 'User'} className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center text-4xl font-bold bg-gradient-to-br from-accent-cyan to-accent-purple text-white">
-                                {user.name?.[0]?.toUpperCase() || (user as any).username?.[0]?.toUpperCase()}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 text-center md:text-left z-10">
-                        <div className="flex flex-col md:flex-row items-center gap-4 mb-1">
-                            <h1 className="text-3xl md:text-4xl font-display font-extrabold text-text-primary">
-                                {user.name || (user as any).username}
-                            </h1>
-                            {!isPublic && (
-                                <span className="flex items-center gap-1.5 px-3 py-1 bg-bg-secondary border border-border rounded-full text-xs font-medium text-text-secondary">
-                                    <Lock size={12} />
-                                    Private Profile
-                                </span>
-                            )}
-                        </div>
-                        <p className="text-text-muted text-sm mb-4">@{(user as any).username}</p>
-
-                        {/* Bio */}
-                        {/* @ts-ignore */}
-                        {user.settings?.bio && (
-                            <p className="text-text-secondary text-base leading-relaxed max-w-2xl mb-6">
-                                {/* @ts-ignore */}
-                                {user.settings.bio}
-                            </p>
-                        )}
-
-                        {/* Stats Summary */}
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 text-sm">
-                            <div className="flex flex-col items-center md:items-start text-text-secondary">
-                                {/* @ts-ignore */}
-                                <span className="font-bold text-lg text-text-primary">{user._count.mediaItems}</span>
-                                <span>Library Items</span>
-                            </div>
-                            <div className="w-px h-8 bg-border hidden sm:block" />
-                            <div className="flex flex-col items-center md:items-start text-text-secondary">
-                                {/* @ts-ignore */}
-                                <span className="font-bold text-lg text-text-primary">{user._count.followers}</span>
-                                <span>Followers</span>
-                            </div>
-                            <div className="w-px h-8 bg-border hidden sm:block" />
-                            <div className="flex flex-col items-center md:items-start text-text-secondary">
-                                {/* @ts-ignore */}
-                                <span className="font-bold text-lg text-text-primary">{user._count.following}</span>
-                                <span>Following</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Social Links */}
-                    <div className="flex items-center gap-3 z-10 self-center md:self-start">
-                        {/* @ts-ignore */}
-                        {user.settings?.website && (
-                            <a
-                                // @ts-ignore
-                                href={user.settings.website}
-                                target="_blank" rel="noreferrer" className="p-3 bg-bg-secondary border border-border rounded-xl hover:border-accent-cyan transition-colors group">
-                                <Globe size={18} className="text-text-secondary group-hover:text-accent-cyan transition-colors" />
-                            </a>
-                        )}
-                        {/* @ts-ignore */}
-                        {user.settings?.twitter && (
-                            <a
-                                // @ts-ignore
-                                href={`https://twitter.com/${user.settings.twitter.replace('@', '')}`}
-                                target="_blank" rel="noreferrer" className="p-3 bg-bg-secondary border border-border rounded-xl hover:border-accent-cyan transition-colors group">
-                                <Twitter size={18} className="text-text-secondary group-hover:text-accent-cyan transition-colors" />
-                            </a>
-                        )}
-                        {/* @ts-ignore */}
-                        {user.settings?.instagram && (
-                            <a
-                                // @ts-ignore
-                                href={`https://instagram.com/${user.settings.instagram.replace('@', '')}`}
-                                target="_blank" rel="noreferrer" className="p-3 bg-bg-secondary border border-border rounded-xl hover:border-accent-purple transition-colors group">
-                                <Instagram size={18} className="text-text-secondary group-hover:text-accent-purple transition-colors" />
-                            </a>
-                        )}
-                    </div>
+                    {/* Dynamic Blobs */}
+                    <div className="absolute -top-24 -left-24 w-64 h-64 bg-accent-purple/10 rounded-full blur-3xl animate-pulse" />
+                    <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-accent-cyan/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }} />
                 </div>
 
-                {/* Content Area */}
-                <div className="mt-12">
-                    {
-                        isPublic ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8" >
-                                <div className="space-y-12 min-w-0">
-                                    {/* Favorites Horizontal Scroll */}
-                                    {/* @ts-ignore */}
-                                    {((user.favoritePeople?.length ?? 0) > 0 || (user.favoriteMedia?.length ?? 0) > 0) && (
-                                        <div>
-                                            <h2 className="text-2xl font-bold font-display text-text-primary flex items-center gap-2 mb-6">
-                                                <Heart size={20} className="text-[#ff3264]" />
-                                                Favorites
-                                            </h2>
-                                            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar items-stretch snap-x">
-                                                {/* Map Media Favorites */}
-                                                {/* @ts-ignore */}
-                                                {user.favoriteMedia?.map((media: any) => (
-                                                    <Link key={media.id} href={`/media/${media.tmdbId}?type=${media.type.toLowerCase()}`} className="flex-shrink-0 w-32 group snap-start">
-                                                        <div className="aspect-[2/3] rounded-xl overflow-hidden mb-2 border border-border group-hover:border-accent-cyan transition-colors relative bg-bg-secondary">
-                                                            {media.posterUrl ? (
-                                                                <img src={media.posterUrl} alt={media.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                            ) : (
-                                                                <div className="flex items-center justify-center w-full h-full text-text-muted text-xs text-center p-2">{media.title}</div>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-cyan transition-colors">{media.title}</p>
-                                                        <p className="text-xs text-text-muted capitalize">{media.type.toLowerCase()}</p>
-                                                    </Link>
-                                                ))}
+                {/* Profile Header Container */}
+                <div className="max-w-7xl mx-auto px-6 relative">
+                    <div className="flex flex-col md:flex-row gap-6 md:items-end -mt-16 md:-mt-20 mb-12">
+                        {/* Avatar */}
+                        <div className="relative shrink-0 group">
+                            <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-bg-card p-1 shadow-2xl border border-border/50 group-hover:scale-[1.02] transition-transform duration-500">
+                                {userObj.image ? (
+                                    <img src={userObj.image} alt={userObj.name || userObj.username} className="w-full h-full object-cover rounded-[1.4rem]" />
+                                ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-bg-secondary to-bg-card rounded-[1.4rem] flex items-center justify-center text-4xl font-bold text-text-primary">
+                                        {(userObj.name || userObj.username)?.[0]?.toUpperCase()}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                                                {/* Map People Favorites */}
-                                                {/* @ts-ignore */}
-                                                {user.favoritePeople?.map((person: any) => (
-                                                    <Link key={person.id} href={`/people?search=${encodeURIComponent(person.name)}`} className="flex-shrink-0 w-32 group snap-start">
-                                                        <div className="aspect-[2/3] rounded-xl overflow-hidden mb-2 border border-border group-hover:border-accent-purple transition-colors relative bg-bg-secondary">
-                                                            {person.profileUrl ? (
-                                                                <img src={person.profileUrl} alt={person.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                            ) : (
-                                                                <div className="flex items-center justify-center w-full h-full text-text-muted text-xs text-center p-2">{person.name}</div>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-purple transition-colors">{person.name}</p>
-                                                        <p className="text-xs text-text-muted">{person.knownForDepartment || 'Actor'}</p>
-                                                    </Link>
-                                                ))}
-                                            </div>
+                        {/* User Info & Actions */}
+                        <div className="flex-1 pb-2">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                                <div>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <h1 className="text-3xl md:text-5xl font-display font-black text-white tracking-tight drop-shadow-sm">
+                                            {userObj.name || userObj.username}
+                                        </h1>
+                                        {userObj.role === 'ADMIN' && (
+                                            <span className="px-2.5 py-0.5 rounded-full bg-accent-purple/20 text-accent-purple text-[10px] font-black tracking-widest uppercase border border-accent-purple/30 backdrop-blur-md">Staff</span>
+                                        )}
+                                        {!isPublic && (
+                                            <Lock size={16} className="text-text-muted" />
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-text-muted font-bold text-sm">
+                                        <span className="text-accent-cyan cursor-default">@{userObj.username}</span>
+                                        <div className="flex items-center gap-1.5 opacity-70">
+                                            <CalendarDays size={14} />
+                                            Joined {new Date(userObj.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    {session?.user?.id && userObj.id !== session.user.id ? (
+                                        <>
+                                            <FollowButton targetUserId={userObj.id} initialFollowing={isFollowing} />
+                                            <FriendButton targetUserId={userObj.id} initialStatus={friendStatus} />
+                                        </>
+                                    ) : session?.user?.id === userObj.id && (
+                                        <Link href="/settings" className="px-6 py-2.5 rounded-xl bg-bg-card border border-border hover:border-text-primary transition-all text-sm font-bold flex items-center gap-2">
+                                            Edit Profile
+                                        </Link>
                                     )}
-
-                                    <div>
-                                        <h2 className="text-2xl font-bold font-display text-text-primary flex items-center gap-2 mb-6">
-                                            <Clapperboard size={20} className="text-accent-cyan" />
-                                            Library Overview
-                                        </h2>
-
-                                        <UserLibraryDisplay
-                                            userId={user.id}
-                                            // @ts-ignore
-                                            hideRatings={user.settings?.hideRatings ?? false}
-                                        />
-                                    </div>
                                 </div>
-
-                                <aside className="space-y-6">
-                                    <div className="glass-card p-6 rounded-2xl border border-border">
-                                        <h3 className="font-bold text-text-primary mb-4 flex items-center gap-2">
-                                            <CalendarDays size={16} className="text-accent-purple" />
-                                            Member Since
-                                        </h3>
-                                        <p className="text-text-secondary text-sm">
-                                            {new Date(user.createdAt).toLocaleDateString(undefined, {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric'
-                                            })}
-                                        </p>
-                                    </div>
-
-                                </aside>
                             </div>
-                        ) : (
-                            <div className="glass-card p-16 text-center rounded-3xl border border-border flex flex-col items-center justify-center">
-                                <div className="w-16 h-16 bg-bg-secondary rounded-full flex items-center justify-center mb-6">
-                                    <Lock size={24} className="text-text-secondary" />
-                                </div>
-                                <h2 className="text-2xl font-bold font-display text-text-primary mb-2">This profile is private</h2>
-                                <p className="text-text-secondary max-w-md">
-                                    {user.name || (user as any).username} has chosen to keep their library and activity private.
+                        </div>
+                    </div>
+
+                    {/* Stats & Bio Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start mb-16">
+                        {/* Bio & Links */}
+                        <div className="lg:col-span-8 space-y-8">
+                            {userObj.settings?.bio && (
+                                <p className="text-xl text-text-secondary leading-relaxed max-w-3xl whitespace-pre-line font-medium italic">
+                                    "{userObj.settings.bio}"
                                 </p>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-3">
+                                {userObj.steamId && userObj.settings?.showSteamProfile && (
+                                    <a href={`https://steamcommunity.com/profiles/${userObj.steamId}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-bg-card border border-border hover:border-[#66c0f4]/50 transition-all group">
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/512px-Steam_icon_logo.svg.png" alt="Steam" className="w-4 h-4 opacity-70 group-hover:opacity-100" />
+                                        <span className="text-sm font-bold">Steam</span>
+                                    </a>
+                                )}
+                                {userObj.settings?.website && (
+                                    <a href={userObj.settings.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-bg-card border border-border hover:border-accent-cyan/50 hover:text-accent-cyan transition-all text-sm font-bold">
+                                        <Globe size={18} /> Website
+                                    </a>
+                                )}
+                                {userObj.settings?.twitter && (
+                                    <a href={`https://twitter.com/${userObj.settings.twitter.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-bg-card border border-border hover:border-[#1DA1F2]/50 hover:text-[#1DA1F2] transition-all text-sm font-bold">
+                                        <Twitter size={18} /> Twitter
+                                    </a>
+                                )}
+                                {userObj.settings?.instagram && (
+                                    <a href={`https://instagram.com/${userObj.settings.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-bg-card border border-border hover:border-accent-pink/50 hover:text-accent-pink transition-all text-sm font-bold">
+                                        <Instagram size={18} /> Instagram
+                                    </a>
+                                )}
                             </div>
-                        )}
+                        </div>
+
+                        {/* Social Stats Card */}
+                        <div className="lg:col-span-4 lg:sticky lg:top-24">
+                            <div className="glass-card p-8 rounded-[2.5rem] border border-border/50 bg-bg-card/20 backdrop-blur-xl grid grid-cols-3 gap-2 shadow-2xl relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-accent-purple/5 to-accent-cyan/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                                <div className="text-center relative z-10">
+                                    <div className="text-3xl font-display font-black text-white">{userObj._count?.mediaItems || 0}</div>
+                                    <div className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mt-1">Items</div>
+                                </div>
+                                <div className="text-center relative z-10">
+                                    <div className="text-3xl font-display font-black text-white">{userObj._count?.followers || 0}</div>
+                                    <div className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mt-1">Fans</div>
+                                </div>
+                                <div className="text-center relative z-10">
+                                    <div className="text-3xl font-display font-black text-white">{userObj._count?.following || 0}</div>
+                                    <div className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mt-1">Flows</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </main>
+
+            <main className="max-w-7xl mx-auto px-6 pb-32">
+                {isPublic ? (
+                    <ProfileTabs
+                        userId={userObj.id}
+                        currentUserId={session?.user?.id}
+                        mediaItems={allMediaItems as any}
+                        favoriteMedia={userObj.favoriteMedia || []}
+                        favoritePeople={userObj.favoritePeople || []}
+                        quotes={userObj.quotes || []}
+                        lists={userObj.lists || []}
+                    />
+                ) : (
+                    <div className="glass-card p-24 text-center rounded-[3rem] border border-border/50 bg-bg-card/20 backdrop-blur-md flex flex-col items-center justify-center mt-8">
+                        <div className="w-20 h-20 bg-bg-secondary/50 rounded-3xl flex items-center justify-center mb-8 border border-border animate-pulse">
+                            <Lock size={32} className="text-text-muted" />
+                        </div>
+                        <h2 className="text-3xl font-black font-display text-white mb-4 tracking-tight">Private Access</h2>
+                        <p className="text-text-secondary max-w-md text-lg">
+                            {userObj.name || userObj.username} has kept their loops private. Follow them to request access.
+                        </p>
+                    </div>
+                )}
+            </main>
+        </div>
     )
 }

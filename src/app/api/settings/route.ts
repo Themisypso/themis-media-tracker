@@ -13,31 +13,28 @@ const settingsSchema = z.object({
     isPublic: z.boolean().optional(),
     hideRatings: z.boolean().optional(),
     hideActivity: z.boolean().optional(),
+    showSteamProfile: z.boolean().optional(),
     language: z.string().optional(),
     theme: z.enum(['LIGHT', 'DARK', 'CYBERPUNK', 'RETROWAVE']).optional(),
 })
 
-export async function GET(req: Request) {
+export async function GET(_req: Request) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     try {
-        // @ts-ignore
         let settings = await prisma.userSettings.findUnique({
             where: { userId: session.user.id }
         })
 
         if (!settings) {
-            // @ts-ignore
             settings = await prisma.userSettings.create({
-                data: {
-                    userId: session.user.id
-                }
+                data: { userId: session.user.id }
             })
         }
 
         return NextResponse.json({ settings })
-    } catch (e: any) {
+    } catch (e) {
         console.error('[SETTINGS GET]', e)
         return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
     }
@@ -53,7 +50,6 @@ export async function PATCH(req: Request) {
 
         // Run both updates in a transaction
         const [updatedSettings] = await prisma.$transaction([
-            // @ts-ignore
             prisma.userSettings.upsert({
                 where: { userId: session.user.id },
                 update: settingsData,
@@ -66,7 +62,7 @@ export async function PATCH(req: Request) {
         ])
 
         return NextResponse.json({ settings: updatedSettings })
-    } catch (e: any) {
+    } catch (e) {
         if (e instanceof z.ZodError) {
             return NextResponse.json({ error: e.errors[0].message }, { status: 400 })
         }

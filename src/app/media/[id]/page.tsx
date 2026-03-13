@@ -1,22 +1,33 @@
 import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
-import { Star, Clock, Film, Tv, Gamepad2, Users, ArrowLeft, ExternalLink } from 'lucide-react'
+import { Star, Clock, Film, Users, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { MediaActionPanel } from '@/components/MediaActionPanel'
 import { MediaCastCrew } from '@/components/MediaCastCrew'
+import { MediaDiscussion } from '@/components/MediaDiscussion'
+import { AddQuoteCTA } from '@/components/AddQuoteCTA'
 
-const TMDB_BASE = 'https://api.themoviedb.org/3'
-const API_KEY = process.env.TMDB_API_KEY
-
+/**
+ * Fetch TMDB data through the internal proxy route.
+ * This avoids embedding the raw API key in the server component fetch URL
+ * and benefits from the LRU cache in /api/tmdb/details/[id].
+ */
 async function getTmdbData(id: string, type: string) {
-    if (!type || (type !== 'MOVIE' && type !== 'TVSHOW' && type !== 'movie' && type !== 'tv')) return null
-    const tmdbType = (type === 'MOVIE' || type === 'movie') ? 'movie' : 'tv'
+    const upper = type?.toUpperCase()
+    const isMovie = upper === 'MOVIE'
+    const isTv = upper === 'TVSHOW' || upper === 'TV' || upper === 'ANIME'
+    if (!isMovie && !isTv) return null
+    const mediaType = isMovie ? 'movie' : 'tv'
 
     try {
-        const res = await fetch(`${TMDB_BASE}/${tmdbType}/${id}?api_key=${API_KEY}&append_to_response=credits`)
+        // Use NEXTAUTH_URL (configured for both dev and prod) as the base
+        const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+        const res = await fetch(`${base}/api/tmdb/details/${id}?type=${mediaType}`, {
+            next: { revalidate: 3600 }
+        })
         if (!res.ok) return null
         return await res.json()
     } catch {
@@ -27,46 +38,36 @@ async function getTmdbData(id: string, type: string) {
 export default async function PublicMediaPage({ params, searchParams }: { params: { id: string }, searchParams: { type?: string } }) {
     const session = await getServerSession(authOptions)
 
-    // 1. First try to find it in our local database (CUID)
-    let baseItem = await prisma.mediaItem.findUnique({
-        where: { id: params.id }
-    })
+    // 1. Try to find in local DB (CUID-based link from library)
+    const baseItem = await prisma.mediaItem.findUnique({ where: { id: params.id } })
 
-    let tmdbData: any = null
-    let fetchedFromTmdb = false
-
-    // 2. If not found locally, OR if we want to enrich the local item with full cast/crew, let's fetch TMDB
-    // For this rewrite, we will always fetch TMDB if tmdbId is available, or if params.id IS the tmdbId
+    // 2. Determine target TMDB ID and type, then fetch from our proxy
     const targetTmdbId = baseItem?.tmdbId || params.id
     const targetType = baseItem?.type || searchParams.type
 
-    if (targetTmdbId && targetType) {
-        tmdbData = await getTmdbData(targetTmdbId, targetType as string)
-    }
+    const tmdbData = (targetTmdbId && targetType) ? await getTmdbData(targetTmdbId, targetType as string) : null
 
-    // 3. If neither local DB item nor TMDB data exists, 404
-    if (!baseItem && !tmdbData) {
-        notFound()
-    }
+    // 3. 404 if nothing found
+    if (!baseItem && !tmdbData) notFound()
 
-    // 4. Construct unified display item
+    // 4. Build unified display item — proxy returns a normalized shape
     const displayItem = {
-        id: baseItem?.id || params.id, // For TMDB fallback, use tmdbId as local ID dummy
+        id: baseItem?.id || params.id,
         tmdbId: baseItem?.tmdbId || params.id,
-        title: baseItem?.title || tmdbData?.title || tmdbData?.name,
-        type: baseItem?.type || (searchParams.type?.toUpperCase() === 'TV' ? 'TVSHOW' : searchParams.type?.toUpperCase() || 'MOVIE'),
-        posterUrl: baseItem?.posterUrl || (tmdbData?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbData.poster_path}` : null),
-        backdropUrl: baseItem?.backdropUrl || (tmdbData?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdbData.backdrop_path}` : null),
-        releaseYear: baseItem?.releaseYear || (tmdbData?.release_date ? parseInt(tmdbData.release_date) : tmdbData?.first_air_date ? parseInt(tmdbData.first_air_date) : null),
+        title: baseItem?.title || tmdbData?.title,
+        type: baseItem?.type || tmdbData?.resolvedType || (searchParams.type?.toUpperCase() === 'TV' ? 'TVSHOW' : searchParams.type?.toUpperCase() || 'MOVIE'),
+        posterUrl: baseItem?.posterUrl || tmdbData?.posterUrl || null,
+        backdropUrl: baseItem?.backdropUrl || tmdbData?.backdropUrl || null,
+        releaseYear: baseItem?.releaseYear || tmdbData?.releaseYear || null,
         overview: baseItem?.overview || tmdbData?.overview,
-        tmdbRating: baseItem?.tmdbRating || (tmdbData?.vote_average ? Math.round(tmdbData.vote_average * 10) / 10 : null),
-        runtime: baseItem?.runtime || tmdbData?.runtime || (tmdbData?.episode_run_time?.[0]),
-        genres: baseItem?.genres?.length ? baseItem.genres : (tmdbData?.genres?.map((g: any) => g.name) || []),
-        imdbId: baseItem?.imdbId || tmdbData?.imdb_id,
+        tmdbRating: baseItem?.tmdbRating || tmdbData?.tmdbRating || null,
+        runtime: baseItem?.runtime || tmdbData?.runtime || null,
+        genres: baseItem?.genres?.length ? baseItem.genres : (tmdbData?.genres || []),
+        imdbId: baseItem?.imdbId || tmdbData?.imdbId || null,
         status: baseItem?.status
     }
 
-    // 5. Check if logged-in user already tracks it (only matters if we fell back to TMDB)
+    // 5. Check if logged-in user already tracks it
     let userMediaItem = null
     if (session?.user?.id && displayItem.tmdbId) {
         userMediaItem = await prisma.mediaItem.findUnique({
@@ -74,13 +75,11 @@ export default async function PublicMediaPage({ params, searchParams }: { params
         })
     }
 
-    // We pass userMediaItem as baseItem to the Add Widget if they already track it, OR the displayItem if new
     const widgetItem = userMediaItem || displayItem
 
     // 6. Platform stats
     let avgPlatformRating: number | null = null
     let totalTracked = 0
-
     if (displayItem.tmdbId) {
         const stats = await prisma.mediaItem.aggregate({
             where: { tmdbId: displayItem.tmdbId },
@@ -91,7 +90,6 @@ export default async function PublicMediaPage({ params, searchParams }: { params
         totalTracked = stats._count.id
     }
 
-    // 7. Format time helper
     function formatTime(min: number | null) {
         if (!min) return null
         const h = Math.floor(min / 60)
@@ -137,13 +135,23 @@ export default async function PublicMediaPage({ params, searchParams }: { params
                                 session={session}
                                 urlId={params.id}
                             />
+                            {session?.user && displayItem.tmdbId && (
+                                <AddQuoteCTA
+                                    tmdbId={displayItem.tmdbId}
+                                    type={displayItem.type}
+                                    title={displayItem.title as string}
+                                    posterUrl={displayItem.posterUrl}
+                                    backdropUrl={displayItem.backdropUrl}
+                                    releaseYear={displayItem.releaseYear}
+                                />
+                            )}
                         </div>
                     </div>
 
                     {/* Right Column: Details */}
                     <div className="flex-1 min-w-0 pt-6 md:pt-16 text-center md:text-left">
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4">
-                            <span className={`text-xs px-3 py-1 rounded-full font-bold tracking-widest uppercase bg-bg-secondary border border-border`}>{displayItem.type}</span>
+                            <span className="text-xs px-3 py-1 rounded-full font-bold tracking-widest uppercase bg-bg-secondary border border-border">{displayItem.type}</span>
                             {displayItem.releaseYear && <span className="text-sm font-medium text-[#8899aa]">{displayItem.releaseYear}</span>}
                             {displayItem.imdbId && (
                                 <a href={`https://www.imdb.com/title/${displayItem.imdbId}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-[#f5c518] hover:bg-[#f5c518]/10 px-2 py-1 rounded-md transition-colors font-bold border border-[#f5c518]/30">
@@ -162,14 +170,11 @@ export default async function PublicMediaPage({ params, searchParams }: { params
                                     <span className="font-bold text-lg text-[#e8edf5]">{displayItem.tmdbRating} <span className="text-sm text-[#8899aa] font-normal">TMDB</span></span>
                                 </div>
                             )}
-
                             <div className="w-1.5 h-1.5 rounded-full bg-border md:block hidden" />
-
                             <div className="flex items-center gap-2">
                                 <Users size={16} className="text-[#8899aa]" />
                                 <span className="font-medium text-[#e8edf5]">{totalTracked} <span className="text-sm text-[#8899aa]">Trackers</span></span>
                             </div>
-
                             {displayItem.runtime && (
                                 <>
                                     <div className="w-1.5 h-1.5 rounded-full bg-border md:block hidden" />
@@ -183,8 +188,8 @@ export default async function PublicMediaPage({ params, searchParams }: { params
 
                         {displayItem.genres && displayItem.genres.length > 0 && (
                             <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-10">
-                                {displayItem.genres.map((g: any) => (
-                                    <span key={typeof g === 'string' ? g : g.name} className="text-xs font-medium px-4 py-1.5 rounded-full bg-bg-card text-[#8899aa] border border-border shadow-sm">{typeof g === 'string' ? g : g.name}</span>
+                                {displayItem.genres.map((g: string) => (
+                                    <span key={g} className="text-xs font-medium px-4 py-1.5 rounded-full bg-bg-card text-[#8899aa] border border-border shadow-sm">{g}</span>
                                 ))}
                             </div>
                         )}
@@ -197,8 +202,13 @@ export default async function PublicMediaPage({ params, searchParams }: { params
                             </div>
                         )}
 
-                        {/* Cast & Crew Section */}
+                        {/* Cast & Crew Section — tmdbData.credits from proxy already includes this */}
                         <MediaCastCrew credits={tmdbData?.credits} type={displayItem.type} />
+
+                        {/* Discussion Section */}
+                        {displayItem.tmdbId && (
+                            <MediaDiscussion tmdbId={displayItem.tmdbId} title={displayItem.title} />
+                        )}
                     </div>
                 </div>
             </main>

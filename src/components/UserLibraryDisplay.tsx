@@ -30,8 +30,8 @@ export async function UserLibraryDisplay({ userId, hideRatings }: Props) {
     return (
         <div className="space-y-12">
             {watching.length > 0 && (
-                <section>
-                    <h3 className="text-xl font-bold font-display text-text-primary mb-4 border-b border-border pb-2">Currently Watching / Playing</h3>
+                <div className="mb-14 fade-in">
+                    <h3 className="text-xl font-bold font-display text-text-primary mb-4 border-b border-border pb-2">Currently In Progress</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
                         {watching.map(item => (
                             <PosterCard
@@ -41,7 +41,7 @@ export async function UserLibraryDisplay({ userId, hideRatings }: Props) {
                             />
                         ))}
                     </div>
-                </section>
+                </div>
             )}
 
             {completed.length > 0 && (

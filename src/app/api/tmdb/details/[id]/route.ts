@@ -29,10 +29,17 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         const details = await detailsRes.json()
         const external = externalRes.ok ? await externalRes.json() : {}
 
+        const isAnime = mediaType === 'tv' &&
+            (details.origin_country || []).includes('JP') &&
+            (details.genres || []).some((g: any) => g.id === 16 || g.name === 'Animation');
+
+        const resolvedType = isAnime ? 'ANIME' : mediaType === 'tv' ? 'TVSHOW' : 'MOVIE';
+
         const response = {
             id: details.id,
             title: details.title || details.name,
             mediaType,
+            resolvedType,
             posterUrl: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null,
             backdropUrl: details.backdrop_path ? `https://image.tmdb.org/t/p/w1280${details.backdrop_path}` : null,
             releaseYear: details.release_date
@@ -40,13 +47,26 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
                 : details.first_air_date
                     ? parseInt(details.first_air_date.split('-')[0])
                     : null,
-            runtime: details.runtime || details.episode_run_time?.[0] || null, // minutes
+            runtime: details.runtime || details.episode_run_time?.[0] || null,
             genres: (details.genres || []).map((g: any) => g.name),
             overview: details.overview,
             tmdbRating: details.vote_average ? Math.round(details.vote_average * 10) / 10 : null,
             imdbId: external.imdb_id || null,
             episodeCount: details.number_of_episodes || null,
             seasonCount: details.number_of_seasons || null,
+            originCountry: details.origin_country || details.production_countries?.map((c: any) => c.iso_3166_1) || [],
+            // Cast & crew — was fetched via append_to_response but previously dropped
+            credits: {
+                cast: (details.credits?.cast || []).slice(0, 20).map((p: any) => ({
+                    id: p.id, name: p.name, character: p.character,
+                    profile_path: p.profile_path ?? null,
+                    order: p.order,
+                })),
+                crew: (details.credits?.crew || []).map((p: any) => ({
+                    id: p.id, name: p.name, job: p.job, department: p.department,
+                    profile_path: p.profile_path ?? null,
+                })),
+            },
         }
 
         cache.set(cacheKey, response)

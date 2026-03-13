@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { revalidateTag } from 'next/cache'
 import { z } from 'zod'
+import { calcTotalTime } from '@/lib/utils/media'
 
 const updateSchema = z.object({
     status: z.enum(['WATCHING', 'COMPLETED', 'PLANNED', 'DROPPED']).optional(),
@@ -14,18 +15,8 @@ const updateSchema = z.object({
     episodeDuration: z.number().int().optional().nullable(),
     playtimeHours: z.number().optional().nullable(),
     runtime: z.number().int().optional().nullable(),
+    progress: z.number().int().min(0).optional().nullable(),
 })
-
-function calcTotalTime(item: any): number | null {
-    if (item.type === 'GAME') return item.playtimeHours ? Math.round(item.playtimeHours * 60) : null
-    if (item.type === 'ANIME' || item.type === 'TVSHOW') {
-        const eps = item.episodeCount ?? 0
-        const dur = item.episodeDuration ?? item.runtime ?? 24
-        return eps > 0 ? eps * dur : null
-    }
-    if (item.type === 'MOVIE') return item.runtime ?? null
-    return null
-}
 
 async function getOwnedItem(userId: string, id: string) {
     const item = await prisma.mediaItem.findUnique({ where: { id } })
@@ -33,7 +24,7 @@ async function getOwnedItem(userId: string, id: string) {
     return item
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const item = await getOwnedItem(session.user.id, params.id)
@@ -60,6 +51,40 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
             data: { ...updates, totalTimeMinutes },
         })
 
+        // Log activities if changed
+        if (updates.status && updates.status !== existing.status) {
+            prisma.activity.create({
+                data: {
+                    userId: session.user.id,
+                    type: 'STATUS_CHANGE',
+                    mediaId: updated.id,
+                    content: updates.status,
+                }
+            }).catch(e => console.error('[ACTIVITY ERROR]', e))
+        }
+
+        if (updates.userRating !== undefined && updates.userRating !== existing.userRating && updates.userRating !== null) {
+            prisma.activity.create({
+                data: {
+                    userId: session.user.id,
+                    type: 'RATED',
+                    mediaId: updated.id,
+                    content: `Rated ${updates.userRating}/10`,
+                }
+            }).catch(e => console.error('[ACTIVITY ERROR]', e))
+        }
+
+        if (updates.notes !== undefined && updates.notes !== existing.notes && updates.notes !== null && updates.notes.trim() !== '') {
+            prisma.activity.create({
+                data: {
+                    userId: session.user.id,
+                    type: 'NOTE_ADDED',
+                    mediaId: updated.id,
+                    content: 'Added a note to their library',
+                }
+            }).catch(e => console.error('[ACTIVITY ERROR]', e))
+        }
+
         revalidateTag('landing-data')
         return NextResponse.json({ item: updated })
     } catch (error) {
@@ -70,7 +95,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

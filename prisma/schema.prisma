@@ -16,6 +16,7 @@ model User {
   name          String?
   email         String    @unique
   username      String?   @unique
+  steamId       String?   @unique
   emailVerified DateTime?
   image         String?
   password      String?
@@ -29,13 +30,33 @@ model User {
 
   // New Relational Links
   settings         UserSettings?
-  followers        Follows[]     @relation("followers")
-  following        Follows[]     @relation("following")
+  followers        Follows[]        @relation("followers")
+  following        Follows[]        @relation("following")
   activities       Activity[]
   quotes           Quote[]
-  submittedReports Report[]      @relation("ReportedBy")
+  submittedReports Report[]         @relation("ReportedBy")
   favoritePeople   FavoritePerson[]
   favoriteMedia    FavoriteMedia[]
+
+  // Social & Sharing Features
+  lists                  List[]
+  sentFriendRequests     FriendRequest[]            @relation("SentRequests")
+  receivedFriendRequests FriendRequest[]            @relation("ReceivedRequests")
+  friendships            Friendship[]               @relation("UserFriendships")
+  friendshipsOf          Friendship[]               @relation("FriendOf")
+  sharedSessionsHosted   SharedSession[]            @relation("HostOfSession")
+  sharedSessionLinks     SharedSessionParticipant[]
+
+  // Interactions (Likes, Comments, Notifications)
+  quoteLikes      QuoteLike[]
+  commentLikes    CommentLike[]
+  listLikes       ListLike[]
+  comments        Comment[]
+  notifications   Notification[] @relation("UserNotifications")
+  triggeredNotifs Notification[] @relation("ActorNotifications")
+
+  // Discussions authored
+  discussionThreads DiscussionThread[] @relation("ThreadAuthor")
 }
 
 model Account {
@@ -81,9 +102,11 @@ model MediaItem {
   status MediaStatus @default(PLANNED)
 
   // TMDB / External IDs
-  tmdbId String?
-  imdbId String?
-  rawgId String? // RAWG game ID (slug)
+  tmdbId     String?
+  imdbId     String?
+  rawgId     String? // RAWG game ID (slug)
+  bookId     String? // Google Books volumeId
+  steamAppId String? // Steam App ID for games
 
   // Media metadata
   posterUrl   String?
@@ -94,26 +117,31 @@ model MediaItem {
   tmdbRating  Float?
 
   // Time tracking
-  runtime          Int? // minutes (movies/episodes)
-  episodeCount     Int? // anime/TV shows
-  episodeDuration  Int? // minutes per episode
-  playtimeHours    Float? // games (manual)
-  totalTimeMinutes Int? // computed: episodes*duration or runtime or playtime*60
+  runtime              Int? // minutes (movies/episodes)
+  episodeCount         Int? // anime/TV shows
+  episodeDuration      Int? // minutes per episode
+  playtimeHours        Float? // games (manual)
+  steamPlaytimeMinutes Int? // games (steam sync)
+  totalTimeMinutes     Int? // computed: episodes*duration or runtime or playtime*60
 
   // User data
   userRating Int? // 1-10
   notes      String? @db.Text
 
   // Progress tracking
-  progress  Int? // Current minute, page, or episode
-  pageCount Int? // For books
+  progress       Int? // Current minute, page, or episode
+  pageCount      Int? // For books
+  lastProgressAt DateTime? // Timestamp of last progress update
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activities Activity[]
-  quotes     Quote[]
+  isFeatured Boolean @default(false)
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities        Activity[]
+  quotes            Quote[]
+  discussionThreads DiscussionThread[]
 
   @@unique([userId, tmdbId])
   @@index([userId])
@@ -155,6 +183,14 @@ enum ActivityType {
   PROGRESS_UPDATE
   STATUS_CHANGE
   QUOTE
+  ADDED_MEDIA
+  RATED
+  NOTE_ADDED
+  EPISODE_COMPLETED
+  GAME_COMPLETED
+  BOOK_COMPLETED
+  FAVORITED_PERSON
+  LIST_CREATED
 }
 
 enum ReportTargetType {
@@ -181,9 +217,10 @@ model UserSettings {
   twitter   String?
   instagram String?
 
-  isPublic     Boolean @default(true)
-  hideRatings  Boolean @default(false)
-  hideActivity Boolean @default(false)
+  isPublic         Boolean @default(true)
+  hideRatings      Boolean @default(false)
+  hideActivity     Boolean @default(false)
+  showSteamProfile Boolean @default(true)
 
   language String @default("EN") // TR, EN
   theme    Theme  @default(DARK)
@@ -214,8 +251,9 @@ model Activity {
   mediaId String? // Reference context
   media   MediaItem? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
 
-  content   String?  @db.Text
-  createdAt DateTime @default(now())
+  referenceId String? // For non-media references (e.g., person ID)
+  content     String?  @db.Text
+  createdAt   DateTime @default(now())
 
   @@index([userId])
   @@index([createdAt])
@@ -229,12 +267,18 @@ model Quote {
   mediaId String
   media   MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
-  content   String  @db.Text
-  reference String? // e.g., "Page 42" or "1:24:00"
-  mediaUrl  String? // Cloudinary/Supabase media string for attached image/video
+  content        String         @db.Text
+  reference      String? // e.g., "Page 42" or "1:24:00"
+  mediaUrl       String? // Cloudinary/Supabase URL for attached image/video
+  attachmentType AttachmentType @default(NONE)
+
+  isFeatured Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  likes    QuoteLike[]
+  comments Comment[]
 
   @@index([userId])
   @@index([mediaId])
@@ -278,11 +322,284 @@ model FavoriteMedia {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tmdbId      String
   title       String
-  type        String   // MOVIE, TVSHOW, ANIME
+  type        String // MOVIE, TVSHOW, ANIME
   posterUrl   String?
   releaseYear Int?
   createdAt   DateTime @default(now())
 
   @@unique([userId, tmdbId])
   @@index([userId])
+}
+
+// -----------------------------------------
+// FRIEND SYSTEM
+// -----------------------------------------
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model FriendRequest {
+  id         String              @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     FriendRequestStatus @default(PENDING)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  user1Id   String
+  user2Id   String
+  createdAt DateTime @default(now())
+
+  user1 User @relation("UserFriendships", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2 User @relation("FriendOf", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+// -----------------------------------------
+// SHARED LIBRARY
+// -----------------------------------------
+
+model SharedSession {
+  id        String   @id @default(cuid())
+  code      String   @unique // e.g., "ABC-123"
+  hostId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  host         User                       @relation("HostOfSession", fields: [hostId], references: [id], onDelete: Cascade)
+  participants SharedSessionParticipant[]
+
+  @@index([code])
+}
+
+model SharedSessionParticipant {
+  id        String   @id @default(cuid())
+  sessionId String
+  userId    String
+  joinedAt  DateTime @default(now())
+
+  session SharedSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+  @@index([sessionId])
+}
+
+// -----------------------------------------
+// LISTS
+// -----------------------------------------
+
+model List {
+  id          String  @id @default(cuid())
+  userId      String
+  title       String
+  description String? @db.Text
+  isPublic    Boolean @default(true)
+  isFeatured  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ListItem[]
+  likes ListLike[]
+
+  @@index([userId])
+}
+
+model ListItem {
+  id        String   @id @default(cuid())
+  listId    String
+  tmdbId    String?
+  rawgId    String?
+  bookId    String?
+  mediaType String // "MOVIE", "TVSHOW", "ANIME", "GAME", "BOOK"
+  title     String
+  posterUrl String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+}
+
+// -----------------------------------------
+// SOCIAL INTERACTIONS (Likes & Comments)
+// -----------------------------------------
+
+model QuoteLike {
+  id        String   @id @default(cuid())
+  userId    String
+  quoteId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, quoteId])
+  @@index([quoteId])
+}
+
+model ListLike {
+  id        String   @id @default(cuid())
+  userId    String
+  listId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listId])
+  @@index([listId])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@index([commentId])
+}
+
+model Comment {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Threaded replies
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  // A comment can belong to a Quote OR a DiscussionThread
+  quoteId            String?
+  quote              Quote?            @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  discussionThreadId String?
+  discussionThread   DiscussionThread? @relation(fields: [discussionThreadId], references: [id], onDelete: Cascade)
+
+  likes CommentLike[]
+
+  @@index([userId])
+  @@index([quoteId])
+  @@index([discussionThreadId])
+  @@index([parentId])
+}
+
+// -----------------------------------------
+// DISCUSSIONS
+// -----------------------------------------
+
+model DiscussionThread {
+  id    String  @id @default(cuid())
+  title String? // Optional title
+
+  // Author of the thread
+  userId String?
+  author User?   @relation("ThreadAuthor", fields: [userId], references: [id], onDelete: SetNull)
+
+  // Can be linked to a MediaItem
+  mediaId String?
+  media   MediaItem? @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  // OR can be linked directly to a tmdbId if the media isn't in anyone's library yet
+  tmdbId String?
+
+  // Denormalized media metadata for listing without joins
+  mediaTitle    String?
+  mediaPosterUrl String?
+  mediaType      String? // MOVIE, TVSHOW, ANIME, GAME, BOOK
+
+  isFeatured Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments Comment[]
+
+  @@index([mediaId])
+  @@index([tmdbId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// -----------------------------------------
+// NOTIFICATIONS
+// -----------------------------------------
+
+enum AttachmentType {
+  NONE
+  IMAGE
+  VIDEO
+}
+
+enum NotificationType {
+  LIKE_QUOTE
+  LIKE_LIST
+  LIKE_COMMENT
+  COMMENT_QUOTE
+  COMMENT_DISCUSSION
+  MENTION
+  REPLY
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String // Receiver
+  user   User   @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  actorId String // Person doing the action
+  actor   User   @relation("ActorNotifications", fields: [actorId], references: [id], onDelete: Cascade)
+
+  type        NotificationType
+  referenceId String? // ID of the quote, list, or comment
+
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([actorId])
+}
+
+// -----------------------------------------
+// CMS / ADMIN
+// -----------------------------------------
+
+model FooterConfig {
+  id      String @id @default(cuid())
+  section String // "Product", "Community", "Company", "Social"
+  label   String // e.g., "About"
+  url     String // e.g., "/about"
+  order   Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([section])
 }

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
 import { SearchBar } from '@/components/SearchBar'
 import { GameSearch } from '@/components/GameSearch'
+import { BookSearch } from '@/components/BookSearch'
 import { Search, Info, Plus, Loader2, Film } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -54,10 +55,14 @@ function SearchContent() {
         let type = 'MOVIE'
         if (selectedDetails.mediaType === 'tv') {
             // Check genres for Animation/Anime to classify as ANIME
-            const isAnime = selectedDetails.genres.some((g: string) => g.toLowerCase().includes('animation'))
+            const hasAnimation = selectedDetails.genres.some((g: string) => g.toLowerCase().includes('animation'))
+            const isFromJapan = selectedDetails.originCountry?.includes('JP')
+            const isAnime = hasAnimation && isFromJapan
             type = isAnime ? 'ANIME' : 'TVSHOW'
         } else if (selectedDetails.mediaType === 'movie') {
-            const isAnime = selectedDetails.genres.some((g: string) => g.toLowerCase().includes('animation'))
+            const hasAnimation = selectedDetails.genres.some((g: string) => g.toLowerCase().includes('animation'))
+            const isFromJapan = selectedDetails.originCountry?.includes('JP')
+            const isAnime = hasAnimation && isFromJapan
             type = isAnime ? 'ANIME' : 'MOVIE'
         }
 
@@ -105,8 +110,8 @@ function SearchContent() {
                 />
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8 mt-12">
-                {/* TMDB Results / Selected Detail pane */}
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-8 mt-12">
+                {/* TMDB Results pane */}
                 <div className="glass-card p-6 min-h-[400px]">
                     <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[#1e2a3a]">
                         <Search className="text-[#00d4ff]" size={20} />
@@ -147,7 +152,7 @@ function SearchContent() {
                                 <label className="block text-xs text-[#8899aa] mb-2 font-medium">Initial Status</label>
                                 <div className="flex gap-3 mb-4">
                                     <select name="status" className="input-cyber flex-1" defaultValue="PLANNED">
-                                        <option value="WATCHING">Watching</option>
+                                        <option value="WATCHING">In Progress</option>
                                         <option value="PLANNED">Planned To Watch</option>
                                         <option value="COMPLETED">Completed</option>
                                         <option value="DROPPED">Dropped</option>
@@ -168,6 +173,7 @@ function SearchContent() {
                 </div>
 
                 <GameSearch />
+                <BookSearch />
             </div>
 
         </>

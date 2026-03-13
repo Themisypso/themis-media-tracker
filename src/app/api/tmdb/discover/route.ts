@@ -17,13 +17,14 @@ export async function GET(req: Request) {
     const minRating = searchParams.get('minRating') || ''
     const minVotes = searchParams.get('minVotes') || '100' // Default min votes for meaningful rating sorts
     const withKeywords = searchParams.get('withKeywords') || ''
+    const withoutKeywords = searchParams.get('withoutKeywords') || ''
     const withOriginCountry = searchParams.get('withOriginCountry') || ''
     const year = searchParams.get('year') || ''
     const startYear = searchParams.get('startYear') || ''
     const endYear = searchParams.get('endYear') || ''
     const query = searchParams.get('query') || ''
 
-    const cacheKey = `discover:${type}:${page}:${sort}:${genres}:${minRating}:${withKeywords}:${withOriginCountry}:${year}:${startYear}:${endYear}:${query}`
+    const cacheKey = `discover:${type}:${page}:${sort}:${genres}:${minRating}:${withKeywords}:${withoutKeywords}:${withOriginCountry}:${year}:${startYear}:${endYear}:${query}`
     if (cache.has(cacheKey)) {
         return NextResponse.json(cache.get(cacheKey))
     }
@@ -43,6 +44,7 @@ export async function GET(req: Request) {
             if (genres) endpoint += `&with_genres=${genres}`
             if (minRating) endpoint += `&vote_average.gte=${minRating}`
             if (withKeywords) endpoint += `&with_keywords=${withKeywords}`
+            if (withoutKeywords) endpoint += `&without_keywords=${withoutKeywords}`
             if (withOriginCountry) endpoint += `&with_origin_country=${withOriginCountry}`
 
             if (year) {
@@ -64,18 +66,24 @@ export async function GET(req: Request) {
 
         const data = await res.json()
 
-        const results = (data.results || []).map((item: any) => ({
-            id: String(item.id),
-            title: item.title || item.name,
-            type: type === 'tv' ? 'TVSHOW' : 'MOVIE',
-            posterUrl: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : null,
-            releaseYear: item.release_date
-                ? parseInt(item.release_date.split('-')[0])
-                : item.first_air_date
-                    ? parseInt(item.first_air_date.split('-')[0])
-                    : null,
-            tmdbRating: item.vote_average ? Math.round(item.vote_average * 10) / 10 : null,
-        }))
+        const results = (data.results || []).map((item: any) => {
+            let itemType = type === 'tv' ? 'TVSHOW' : 'MOVIE'
+            const isAnime = (item.origin_country || []).includes('JP') && (item.genre_ids || []).includes(16)
+            if (isAnime) itemType = 'ANIME'
+
+            return {
+                id: String(item.id),
+                title: item.title || item.name,
+                type: itemType,
+                posterUrl: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : null,
+                releaseYear: item.release_date
+                    ? parseInt(item.release_date.split('-')[0])
+                    : item.first_air_date
+                        ? parseInt(item.first_air_date.split('-')[0])
+                        : null,
+                tmdbRating: item.vote_average ? Math.round(item.vote_average * 10) / 10 : null,
+            }
+        })
 
         const response = {
             results,

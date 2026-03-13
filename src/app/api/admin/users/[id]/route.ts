@@ -2,23 +2,27 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isAdminRole } from "@/lib/utils/media";
 import bcrypt from "bcryptjs";
 
 export async function PATCH(
     req: Request,
     { params }: { params: { id: string } }
 ) {
+    const session = await getServerSession(authOptions);
+    if (!session || !isAdminRole(session.user.role)) {
+        return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     try {
-        const session = await getServerSession(authOptions);
-
-        if (!session || session.user.role !== "ADMIN") {
-            return new NextResponse("Unauthorized", { status: 401 });
-        }
-
         const body = await req.json();
-        const { role, username, name, newPassword } = body;
+        const { role, username, name, newPassword, steamId } = body;
 
-        const updateData: any = {};
+        const updateData: Record<string, unknown> = {};
+
+        if (steamId === null) {
+            updateData.steamId = null as any;
+        }
 
         if (role) {
             if (!["USER", "ADMIN", "MODERATOR", "SUPERADMIN"].includes(role)) {
@@ -27,12 +31,9 @@ export async function PATCH(
             updateData.role = role;
         }
 
-        if (name !== undefined) {
-            updateData.name = name;
-        }
+        if (name !== undefined) updateData.name = name;
 
         if (username !== undefined) {
-            // Check uniqueness
             const existing = await prisma.user.findFirst({
                 where: { username, NOT: { id: params.id } }
             });
@@ -61,24 +62,17 @@ export async function PATCH(
     }
 }
 
-
 export async function DELETE(
-    req: Request,
+    _req: Request,
     { params }: { params: { id: string } }
 ) {
+    const session = await getServerSession(authOptions);
+    if (!session || !isAdminRole(session.user.role)) {
+        return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     try {
-        const session = await getServerSession(authOptions);
-
-        if (!session || session.user.role !== "ADMIN") {
-            return new NextResponse("Unauthorized", { status: 401 });
-        }
-
-        const user = await prisma.user.delete({
-            where: {
-                id: params.id,
-            },
-        });
-
+        const user = await prisma.user.delete({ where: { id: params.id } });
         return NextResponse.json(user);
     } catch (error) {
         console.error("[ADMIN_USER_DELETE]", error);

@@ -3,6 +3,7 @@ import './globals.css'
 import { Providers } from '@/components/Providers'
 import { Toaster } from 'react-hot-toast'
 import NextTopLoader from 'nextjs-toploader'
+import { Footer } from '@/components/Footer'
 
 export const metadata: Metadata = {
     title: 'Themis Media Tracker',
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 />
                 <Providers>
                     {children}
+                    <Footer />
                     <Toaster
                         position="bottom-right"
                         toastOptions={{

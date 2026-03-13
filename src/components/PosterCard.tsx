@@ -1,36 +1,54 @@
 'use client'
 
-import { Film, Star, Clock, Tv, Gamepad2, Heart } from 'lucide-react'
+import { Film, Star, Clock, Tv, Gamepad2, BookOpen, Heart } from 'lucide-react'
 import Link from 'next/link'
+import { GlassCard } from '@/components/GlassCard'
+
 import { useMediaFavorites } from '@/hooks/useMediaFavorites'
+import { ProgressBar } from './ProgressBar'
+import { PosterContextMenu } from './PosterContextMenu'
+import { ProgressEditor } from './ProgressEditor'
+import { calcProgressFraction } from '@/lib/utils/media'
+import { useState } from 'react'
+import { X } from 'lucide-react'
 
 interface MediaItem {
     id: string
     title: string
     type: string
-    status: string
+    status?: string | null
     posterUrl: string | null
-    backdropUrl: string | null
-    userRating: number | null
-    notes: string | null
+    backdropUrl?: string | null
+    userRating?: number | null
+    notes?: string | null
     releaseYear: number | null
     tmdbId?: string | null
-    totalTimeMinutes: number | null
-    runtime: number | null
-    episodeCount: number | null
-    episodeDuration: number | null
-    playtimeHours: number | null
+    rawgId?: number | null
+    bookId?: string | null
+    totalTimeMinutes?: number | null
+    runtime?: number | null
+    episodeCount?: number | null
+    episodeDuration?: number | null
+    playtimeHours?: number | null
     genres: string[]
-    overview: string | null
-    tmdbRating: number | null
-    imdbId: string | null
+    overview?: string | null
+    tmdbRating?: number | null
+    imdbId?: string | null
+    // Progress tracking
+    progress?: number | null
+    pageCount?: number | null
 }
+
+type Status = 'WATCHING' | 'COMPLETED' | 'PLANNED' | 'DROPPED'
 
 interface PosterCardProps {
     item: MediaItem
     onClick?: (item: MediaItem) => void
     href?: string
     hideStatus?: boolean
+    showContextMenu?: boolean
+    currentStatus?: Status | null
+    onStatusChange?: (newStatus: Status, newlySavedItem?: any) => void
 }
 
 const typeConfig: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -38,30 +56,82 @@ const typeConfig: Record<string, { label: string; icon: React.ReactNode }> = {
     MOVIE: { label: 'Movie', icon: <Film size={11} /> },
     TVSHOW: { label: 'TV Show', icon: <Tv size={11} /> },
     GAME: { label: 'Game', icon: <Gamepad2 size={11} /> },
+    BOOK: { label: 'Book', icon: <BookOpen size={11} /> },
 }
 
-export function PosterCard({ item, onClick, href, hideStatus }: PosterCardProps) {
+const PROGRESS_COLORS: Record<string, string> = {
+    MOVIE: 'var(--accent-cyan)',
+    TVSHOW: 'var(--accent-purple)',
+    ANIME: '#ff9500',
+    BOOK: '#00ff9d',
+    GAME: 'var(--accent-pink)',
+}
+
+export function PosterCard({ item, onClick, href, hideStatus, showContextMenu = true, currentStatus, onStatusChange }: PosterCardProps) {
     const type = typeConfig[item.type] || { label: item.type, icon: <Film size={11} /> }
     const { isFavorited, toggleFavorite } = useMediaFavorites()
 
-    // We try to use tmdbId if present, else fallback to id (for Discovery/Explore pages where id IS the tmdbId)
     const tmdbId = item.tmdbId || item.id
     const fav = isFavorited(tmdbId)
 
-    function formatTime(min: number | null) {
+    const [localStatus, setLocalStatus] = useState<string | null>(currentStatus || item.status || null)
+    const [progressPopupItem, setProgressPopupItem] = useState<any>(null)
+
+    const activeStatus = localStatus || currentStatus || item.status || null
+
+    const progressFraction = activeStatus === 'WATCHING'
+        ? calcProgressFraction({
+            type: item.type,
+            progress: item.progress,
+            runtime: item.runtime,
+            episodeCount: item.episodeCount,
+            pageCount: item.pageCount,
+        })
+        : null
+
+    function formatTime(min: number | null | undefined) {
         if (!min) return null
         const h = Math.floor(min / 60)
         const m = min % 60
         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
     }
 
+    function renderMetric() {
+        if (item.type === 'BOOK' && item.pageCount) {
+            return (
+                <span className="flex items-center gap-0.5 text-[9px] text-text-secondary">
+                    <BookOpen size={9} />
+                    {item.pageCount} p
+                </span>
+            )
+        }
+        if (item.type === 'GAME' && item.playtimeHours) {
+            return (
+                <span className="flex items-center gap-0.5 text-[9px] text-text-secondary">
+                    <Clock size={9} />
+                    {item.playtimeHours}h
+                </span>
+            )
+        }
+        if (item.totalTimeMinutes) {
+            return (
+                <span className="flex items-center gap-0.5 text-[9px] text-text-secondary">
+                    <Clock size={9} />
+                    {formatTime(item.totalTimeMinutes)}
+                </span>
+            )
+        }
+        return null
+    }
+
     const cardContent = (
-        <div
+        <GlassCard
             onClick={onClick ? () => onClick(item) : undefined}
-            className={`group relative cursor-pointer rounded-xl overflow-hidden border border-border hover:border-border-bright transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover bg-bg-card ${href ? '' : ''}`}
+            interactive
+            className="group border-border hover:border-border-bright cursor-pointer"
         >
             {/* Poster */}
-            <div className="relative aspect-[2/3] overflow-hidden bg-bg-secondary">
+            <div className="relative aspect-[2/3] overflow-hidden bg-bg-secondary rounded-t-xl">
                 {item.posterUrl ? (
                     <img
                         src={item.posterUrl}
@@ -78,15 +148,15 @@ export function PosterCard({ item, onClick, href, hideStatus }: PosterCardProps)
                     </div>
                 )}
 
-                {/* Overlay on hover */}
+                {/* Dark overlay on hover */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                {/* Status badge top-right */}
-                {!hideStatus && (
-                    <span className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full font-medium status-${item.status}`}>
-                        {item.status === 'WATCHING' ? '▶ Watching' :
-                            item.status === 'COMPLETED' ? '✓ Done' :
-                                item.status === 'PLANNED' ? '+ Planned' : '✕ Dropped'}
+                {/* Status badge bottom-right */}
+                {!hideStatus && activeStatus && (
+                    <span className={`absolute bottom-3 right-2 text-[10px] px-2 py-0.5 rounded-full font-medium status-${activeStatus} z-20 shadow-lg`} style={{ backdropFilter: 'blur(8px)' }}>
+                        {activeStatus === 'WATCHING' ? '▶ In Progress' :
+                            activeStatus === 'COMPLETED' ? '✓ Done' :
+                                activeStatus === 'PLANNED' ? '+ Planned' : '✕ Dropped'}
                     </span>
                 )}
 
@@ -106,6 +176,7 @@ export function PosterCard({ item, onClick, href, hideStatus }: PosterCardProps)
                     className={`absolute top-2 left-2 p-1.5 rounded-full z-10 transition-all duration-300 shadow-lg backdrop-blur-sm
                         ${fav ? 'bg-accent-pink/90 text-white' : 'bg-black/40 text-white/70 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100'}
                     `}
+                    aria-label={fav ? 'Remove from favorites' : 'Add to favorites'}
                 >
                     <Heart size={14} className={fav ? 'fill-current' : ''} />
                 </button>
@@ -117,7 +188,36 @@ export function PosterCard({ item, onClick, href, hideStatus }: PosterCardProps)
                         {item.userRating}
                     </span>
                 )}
+
+                {/* Progress bar pinned to bottom of poster — only for WATCHING items with progress */}
+                {progressFraction !== null && (
+                    <div className="absolute bottom-0 left-0 right-0 z-10">
+                        <ProgressBar
+                            fraction={progressFraction}
+                            size="sm"
+                            color={PROGRESS_COLORS[item.type] ?? 'var(--accent-cyan)'}
+                        />
+                    </div>
+                )}
             </div>
+
+            {/* ⋮ context menu — placed OUTSIDE the overflow-hidden poster div so the dropdown is never clipped */}
+            {showContextMenu && (
+                <PosterContextMenu
+                    item={item}
+                    currentStatus={activeStatus as any}
+                    onStatusChange={(newStatus: Status, newlySavedItem?: any) => {
+                        setLocalStatus(newStatus)
+                        if (newStatus === 'WATCHING' && newlySavedItem) {
+                            setProgressPopupItem({
+                                ...newlySavedItem,
+                                tmdbId: newlySavedItem.tmdbId || item.tmdbId || item.id
+                            })
+                        }
+                        onStatusChange?.(newStatus, newlySavedItem)
+                    }}
+                />
+            )}
 
             {/* Info */}
             <div className="p-2.5">
@@ -127,20 +227,49 @@ export function PosterCard({ item, onClick, href, hideStatus }: PosterCardProps)
                         {type.icon}
                         {type.label}
                     </span>
-                    {item.totalTimeMinutes && (
-                        <span className="flex items-center gap-0.5 text-[9px] text-text-secondary">
-                            <Clock size={9} />
-                            {formatTime(item.totalTimeMinutes)}
-                        </span>
-                    )}
+                    {renderMetric()}
                 </div>
             </div>
-        </div>
+        </GlassCard>
     )
 
-    if (href) {
-        return <Link href={href} className="block">{cardContent}</Link>
-    }
+    const wrappedCard = href ? <Link href={href} className="block">{cardContent}</Link> : cardContent
 
-    return cardContent
+    return (
+        <>
+            {wrappedCard}
+
+            {/* In Progress Mini Modal Overlay */}
+            {progressPopupItem && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setProgressPopupItem(null)} />
+
+                    {/* Modal Content */}
+                    <div className="relative glass-card w-full max-w-sm p-6 rounded-2xl border border-accent-cyan/40 shadow-[0_0_40px_rgba(0,212,255,0.15)] animate-in fade-in zoom-in-95">
+                        <button
+                            onClick={() => setProgressPopupItem(null)}
+                            className="absolute top-4 right-4 text-text-muted hover:text-white transition-colors"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        <h3 className="text-lg font-display font-bold text-text-primary mb-1 pr-8">
+                            {progressPopupItem.title}
+                        </h3>
+                        <p className="text-xs text-text-secondary mb-6 border-b border-border pb-3">
+                            Set your current progress
+                        </p>
+
+                        <ProgressEditor
+                            item={progressPopupItem}
+                            onProgressSaved={() => {
+                                setProgressPopupItem(null)
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
+        </>
+    )
 }

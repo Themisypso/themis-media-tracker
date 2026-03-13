@@ -27,7 +27,7 @@ export default async function SettingsPage() {
     // Pass the raw user object as well for avatar and name mapping
     const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { name: true, image: true, email: true, username: true }
+        select: { name: true, image: true, email: true, username: true, steamId: true }
     })
 
     return (

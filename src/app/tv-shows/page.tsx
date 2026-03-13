@@ -14,6 +14,9 @@ export default function TvShowsPage() {
                 type="tv"
                 title="Discover TV Shows"
                 description="Find your next binge-watch. Sort by popularity, rating, or release date."
+                baseFilters={{
+                    withoutKeywords: '210024|287501' // Exclude Anime and Japanese Anime keywords
+                }}
             />
         </div>
     )

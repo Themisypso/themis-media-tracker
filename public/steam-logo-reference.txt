@@ -1,0 +1,6 @@
+// This is a placeholder since I cannot write binary data directly in this tool.
+// I will use a high-quality remote URL for the Steam logo that matches the user's image exactly
+// to ensure it works immediately without local file issues.
+[
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/2048px-Steam_icon_logo.svg.png"
+]

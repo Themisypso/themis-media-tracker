@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Star, Clock, Tv, Film, Gamepad2, ExternalLink, Trash2, Save, ChevronDown } from 'lucide-react'
+import { X, Star, Clock, Film, ExternalLink, Trash2, Save, TrendingUp } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { ProgressEditor } from './ProgressEditor'
+import { ProgressBar } from './ProgressBar'
+import { calcProgressFraction, formatProgressLabel } from '@/lib/utils/media'
 
 interface MediaItem {
     id: string
@@ -10,19 +13,23 @@ interface MediaItem {
     type: string
     status: string
     posterUrl: string | null
-    backdropUrl: string | null
-    userRating: number | null
-    notes: string | null
+    backdropUrl?: string | null
+    userRating?: number | null
+    notes?: string | null
     releaseYear: number | null
-    totalTimeMinutes: number | null
-    runtime: number | null
-    episodeCount: number | null
-    episodeDuration: number | null
-    playtimeHours: number | null
+    totalTimeMinutes?: number | null
+    runtime?: number | null
+    episodeCount?: number | null
+    episodeDuration?: number | null
+    playtimeHours?: number | null
     genres: string[]
-    overview: string | null
-    tmdbRating: number | null
-    imdbId: string | null
+    overview?: string | null
+    tmdbRating?: number | null
+    imdbId?: string | null
+    tmdbId?: string | null
+    // Progress fields
+    progress?: number | null
+    pageCount?: number | null
 }
 
 interface MediaDetailModalProps {
@@ -34,7 +41,7 @@ interface MediaDetailModalProps {
 
 const STATUS_OPTIONS = ['WATCHING', 'COMPLETED', 'PLANNED', 'DROPPED'] as const
 const STATUS_LABELS: Record<string, string> = {
-    WATCHING: '▶ Watching', COMPLETED: '✓ Completed', PLANNED: '+ Planned', DROPPED: '✕ Dropped'
+    WATCHING: '▶ In Progress', COMPLETED: '✓ Completed', PLANNED: '+ Planned', DROPPED: '✕ Dropped'
 }
 
 export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDetailModalProps) {
@@ -45,10 +52,10 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
     const [episodeCount, setEpisodeCount] = useState(item.episodeCount ?? '')
     const [episodeDuration, setEpisodeDuration] = useState(item.episodeDuration ?? '')
     const [playtimeHours, setPlaytimeHours] = useState(item.playtimeHours ?? '')
+    const [localItem, setLocalItem] = useState(item)
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
 
-    // Close on Escape
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
         window.addEventListener('keydown', onKey)
@@ -101,6 +108,9 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
         return h > 0 ? `${h}h ${m}m` : `${m}m`
     }
 
+    const progressFraction = calcProgressFraction(localItem)
+    const progressLabel = formatProgressLabel(localItem)
+
     return (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
             <div className="modal-content" style={{ maxWidth: 860 }}>
@@ -118,11 +128,6 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                 <div className={`flex gap-6 p-6 ${!item.backdropUrl ? 'pt-6' : 'pt-2'}`}>
                     {/* Poster */}
                     <div className="flex-shrink-0">
-                        {item.backdropUrl && (
-                            <button onClick={onClose} className="absolute top-3 right-3 p-2 rounded-full bg-bg-card text-text-secondary hover:text-text-primary transition-colors hidden">
-                                <X size={16} />
-                            </button>
-                        )}
                         {!item.backdropUrl && (
                             <div className="flex justify-end mb-2">
                                 <button onClick={onClose} className="p-2 rounded-full text-text-secondary hover:text-text-primary transition-colors hover:bg-bg-hover">
@@ -139,35 +144,41 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                                 </div>
                             )}
                         </div>
+
+                        {/* Mini progress bar under poster */}
+                        {progressFraction !== null && (
+                            <div className="mt-2 space-y-1">
+                                <ProgressBar fraction={progressFraction} size="md" />
+                                <p className="text-[9px] text-text-muted text-center font-mono">{progressLabel}</p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Details */}
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <h2 className="text-xl font-display font-bold text-text-primary">{item.title}</h2>
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                    {item.releaseYear && <span className="text-sm text-text-secondary">{item.releaseYear}</span>}
-                                    <span className={`text-xs px-2 py-0.5 rounded-full type-${item.type}`}>{item.type}</span>
-                                    {item.tmdbRating && <span className="text-sm text-[#ffd700]">★ {item.tmdbRating} TMDB</span>}
-                                    {item.imdbId && (
-                                        <a href={`https://www.imdb.com/title/${item.imdbId}`} target="_blank" rel="noopener noreferrer"
-                                            className="flex items-center gap-1 text-xs text-[#f5c518] hover:underline">
-                                            <ExternalLink size={10} /> IMDb
-                                        </a>
-                                    )}
-                                </div>
-                                {item.genres.length > 0 && (
-                                    <div className="flex gap-1.5 mt-2 flex-wrap">
-                                        {item.genres.map(g => (
-                                            <span key={g} className="text-xs px-2 py-0.5 rounded bg-bg-hover text-text-secondary border border-border">{g}</span>
-                                        ))}
-                                    </div>
-                                )}
-                                {item.overview && (
-                                    <p className="text-xs text-text-secondary mt-3 line-clamp-3 leading-relaxed">{item.overview}</p>
+                        <div>
+                            <h2 className="text-xl font-display font-bold text-text-primary">{item.title}</h2>
+                            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                {item.releaseYear && <span className="text-sm text-text-secondary">{item.releaseYear}</span>}
+                                <span className={`text-xs px-2 py-0.5 rounded-full type-${item.type}`}>{item.type}</span>
+                                {item.tmdbRating && <span className="text-sm text-[#ffd700]">★ {item.tmdbRating} TMDB</span>}
+                                {item.imdbId && (
+                                    <a href={`https://www.imdb.com/title/${item.imdbId}`} target="_blank" rel="noopener noreferrer"
+                                        className="flex items-center gap-1 text-xs text-[#f5c518] hover:underline">
+                                        <ExternalLink size={10} /> IMDb
+                                    </a>
                                 )}
                             </div>
+                            {item.genres.length > 0 && (
+                                <div className="flex gap-1.5 mt-2 flex-wrap">
+                                    {item.genres.map(g => (
+                                        <span key={g} className="text-xs px-2 py-0.5 rounded bg-bg-hover text-text-secondary border border-border">{g}</span>
+                                    ))}
+                                </div>
+                            )}
+                            {item.overview && (
+                                <p className="text-xs text-text-secondary mt-3 line-clamp-3 leading-relaxed">{item.overview}</p>
+                            )}
                         </div>
 
                         <div className="cyber-line my-4" />
@@ -177,12 +188,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                             {/* Status */}
                             <div>
                                 <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Status</label>
-                                <select
-                                    value={status}
-                                    onChange={e => setStatus(e.target.value)}
-                                    className="input-cyber"
-                                    id={`status-${item.id}`}
-                                >
+                                <select value={status} onChange={e => setStatus(e.target.value)} className="input-cyber" id={`status-${item.id}`}>
                                     {STATUS_OPTIONS.map(s => (
                                         <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                                     ))}
@@ -193,9 +199,9 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                             {(item.type === 'ANIME' || item.type === 'TVSHOW') && (
                                 <>
                                     <div>
-                                        <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Episodes Watched</label>
+                                        <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Total Episodes</label>
                                         <input type="number" min="0" value={episodeCount} onChange={e => setEpisodeCount(e.target.value as any)}
-                                            className="input-cyber" placeholder="e.g. 12" id={`eps-${item.id}`} />
+                                            className="input-cyber" placeholder="e.g. 48" id={`eps-${item.id}`} />
                                     </div>
                                     <div>
                                         <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Episode Duration (min)</label>
@@ -225,6 +231,21 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                             )}
                         </div>
 
+                        {/* ─── Progress Editor ─────────────────────────────────────────────────── */}
+                        {(status === 'WATCHING') && (
+                            <div className="mt-4">
+                                <label className="block text-xs text-text-secondary mb-2 font-medium uppercase tracking-wider flex items-center gap-1.5">
+                                    <TrendingUp size={11} /> Progress
+                                </label>
+                                <div className="glass-card p-3 rounded-xl border border-border">
+                                    <ProgressEditor
+                                        item={localItem}
+                                        onProgressSaved={(updated) => setLocalItem(prev => ({ ...prev, ...updated }))}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* Star Rating */}
                         <div className="mt-4">
                             <label className="block text-xs text-text-secondary mb-2 font-medium uppercase tracking-wider">Your Rating</label>
@@ -237,9 +258,7 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                                         className="star"
                                         style={{ color: n <= (hoverRating || rating) ? '#ffd700' : 'var(--border-bright)' }}
                                         aria-label={`Rate ${n}`}
-                                    >
-                                        ★
-                                    </button>
+                                    >★</button>
                                 ))}
                                 {(rating > 0) && <span className="text-sm text-[#ffd700] ml-2 self-center font-bold">{rating}/10</span>}
                             </div>
@@ -248,21 +267,29 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                         {/* Notes */}
                         <div className="mt-4">
                             <label className="block text-xs text-text-secondary mb-1.5 font-medium uppercase tracking-wider">Notes</label>
-                            <textarea
-                                value={notes}
-                                onChange={e => setNotes(e.target.value)}
-                                rows={3}
-                                placeholder="Your thoughts..."
-                                className="input-cyber resize-none"
-                                id={`notes-${item.id}`}
-                            />
+                            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                                placeholder="Your thoughts..." className="input-cyber resize-none" id={`notes-${item.id}`} />
                         </div>
 
-                        {/* Total time calculated */}
+                        {/* Total time */}
                         {item.totalTimeMinutes && (
                             <div className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
                                 <Clock size={14} className="text-accent-cyan" />
                                 <span>Calculated time: <span className="text-accent-cyan font-semibold">{formatTime(item.totalTimeMinutes)}</span></span>
+                            </div>
+                        )}
+
+                        {/* Quotes Section */}
+                        <div className="mt-6 border-t border-border pt-4">
+                            <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wider mb-3">Quotes</h3>
+                            <QuotesSection mediaId={item.id} />
+                        </div>
+
+                        {/* Similar Recommendations Section */}
+                        {item.tmdbId && (item.type === 'MOVIE' || item.type === 'TVSHOW') && (
+                            <div className="mt-6 border-t border-border pt-4">
+                                <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wider mb-3">Similar Titles</h3>
+                                <SimilarTitles mediaId={item.tmdbId} type={item.type} />
                             </div>
                         )}
 
@@ -280,6 +307,124 @@ export function MediaDetailModal({ item, onClose, onUpdate, onDelete }: MediaDet
                     </div>
                 </div>
             </div>
+        </div>
+    )
+}
+
+function QuotesSection({ mediaId }: { mediaId: string }) {
+    const [quotes, setQuotes] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [content, setContent] = useState('')
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        fetch(`/api/media/${mediaId}/quotes`)
+            .then(res => res.json())
+            .then(data => {
+                setQuotes(Array.isArray(data) ? data : [])
+                setLoading(false)
+            }).catch(() => setLoading(false))
+    }, [mediaId])
+
+    async function addQuote() {
+        if (!content.trim()) return
+        setSaving(true)
+        try {
+            const res = await fetch(`/api/media/${mediaId}/quotes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: content.trim() })
+            })
+            if (!res.ok) throw new Error()
+            const newQuote = await res.json()
+            setQuotes(prev => [newQuote, ...prev])
+            setContent('')
+        } catch {
+            toast.error('Failed to add quote')
+        }
+        setSaving(false)
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="flex gap-2">
+                <input
+                    type="text"
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                    placeholder="Add a memorable quote..."
+                    className="input-cyber flex-1 text-sm bg-bg-secondary border-border"
+                    onKeyDown={e => e.key === 'Enter' && addQuote()}
+                />
+                <button
+                    onClick={addQuote}
+                    disabled={saving || !content.trim()}
+                    className="btn-primary px-3 py-1.5 text-xs whitespace-nowrap"
+                >
+                    {saving ? 'Adding...' : 'Add Quote'}
+                </button>
+            </div>
+
+            {loading ? (
+                <div className="h-10 rounded-xl shimmer"></div>
+            ) : quotes.length === 0 ? (
+                <p className="text-xs text-text-muted italic">No quotes added yet. Save your favorite lines here!</p>
+            ) : (
+                <ul className="space-y-2 max-h-40 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                    {quotes.map(q => (
+                        <li key={q.id} className="p-3 glass-card rounded-lg text-sm text-text-primary border-l-2 border-l-accent-cyan italic">
+                            "{q.content}"
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    )
+}
+
+function SimilarTitles({ mediaId, type }: { mediaId: string, type: string }) {
+    const [similar, setSimilar] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        // Fetch recommendations from TMDB route
+        const endpoint = type === 'MOVIE' ? `/api/tmdb/movie/${mediaId}` : `/api/tmdb/tv/${mediaId}`
+        fetch(endpoint)
+            .then(res => res.json())
+            .then(data => {
+                if (data.recommendations?.results) {
+                    setSimilar(data.recommendations.results.slice(0, 5))
+                }
+                setLoading(false)
+            }).catch(() => setLoading(false))
+    }, [mediaId, type])
+
+    if (loading) return <div className="h-24 rounded-xl shimmer"></div>
+    if (similar.length === 0) return <p className="text-xs text-text-muted">No similar titles found.</p>
+
+    return (
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+            {similar.map(item => (
+                <a
+                    key={item.id}
+                    href={`/media/${item.id}?type=${type.toLowerCase()}`}
+                    className="flex-shrink-0 w-20 group relative overflow-hidden rounded-md"
+                    title={item.title || item.name}
+                >
+                    {item.poster_path ? (
+                        <img
+                            src={`https://image.tmdb.org/t/p/w154${item.poster_path}`}
+                            alt=""
+                            className="w-full aspect-[2/3] object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                    ) : (
+                        <div className="w-full aspect-[2/3] bg-bg-hover"></div>
+                    )}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                        <ExternalLink size={16} className="text-white" />
+                    </div>
+                </a>
+            ))}
         </div>
     )
 }

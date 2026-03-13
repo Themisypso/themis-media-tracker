@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { revalidateTag } from 'next/cache'
 import { z } from 'zod'
+import { calcTotalTime } from '@/lib/utils/media'
 
 const mediaSchema = z.object({
     title: z.string().min(1),
@@ -13,6 +14,7 @@ const mediaSchema = z.object({
     tmdbId: z.string().optional().nullable(),
     imdbId: z.string().optional().nullable(),
     rawgId: z.string().optional().nullable(),
+    bookId: z.string().optional().nullable(),
     posterUrl: z.string().optional().nullable(),
     backdropUrl: z.string().optional().nullable(),
     genres: z.array(z.string()).optional().default([]),
@@ -27,21 +29,6 @@ const mediaSchema = z.object({
     notes: z.string().optional().nullable(),
 })
 
-function calcTotalTime(item: z.infer<typeof mediaSchema>): number | null {
-    if (item.type === 'GAME') {
-        return item.playtimeHours ? Math.round(item.playtimeHours * 60) : null
-    }
-    if (item.type === 'ANIME' || item.type === 'TVSHOW') {
-        const eps = item.episodeCount ?? 0
-        const dur = item.episodeDuration ?? item.runtime ?? 24
-        return eps > 0 ? eps * dur : null
-    }
-    if (item.type === 'MOVIE') {
-        return item.runtime ?? null
-    }
-    return null
-}
-
 export async function GET(req: Request) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -49,6 +36,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const type = searchParams.get('type')
     const status = searchParams.get('status')
+    const cursor = searchParams.get('cursor') ?? undefined
+    const limit = Math.min(parseInt(searchParams.get('limit') ?? '48', 10), 100)
 
     const items = await prisma.mediaItem.findMany({
         where: {
@@ -57,9 +46,15 @@ export async function GET(req: Request) {
             ...(status ? { status: status as any } : {}),
         },
         orderBy: { updatedAt: 'desc' },
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     })
 
-    return NextResponse.json({ items })
+    const hasMore = items.length > limit
+    const page = hasMore ? items.slice(0, limit) : items
+    const nextCursor = hasMore ? page[page.length - 1].id : null
+
+    return NextResponse.json({ items: page, hasMore, nextCursor })
 }
 
 export async function POST(req: Request) {
@@ -70,28 +65,86 @@ export async function POST(req: Request) {
         const body = await req.json()
         const data = mediaSchema.parse(body)
 
-        // Check duplicate
+        // Upsert: if item already exists (same user + distinct provider ID), update its status
+        let existingId: string | null = null;
+
         if (data.tmdbId) {
-            const existing = await prisma.mediaItem.findUnique({
-                where: { userId_tmdbId: { userId: session.user.id, tmdbId: data.tmdbId } },
+            const existing = await prisma.mediaItem.findFirst({
+                where: { userId: session.user.id, tmdbId: data.tmdbId },
             })
-            if (existing) {
-                return NextResponse.json({ error: 'This title is already in your library' }, { status: 409 })
+            if (existing) existingId = existing.id;
+        } else if (data.rawgId) {
+            const existing = await prisma.mediaItem.findFirst({
+                where: { userId: session.user.id, rawgId: data.rawgId },
+            })
+            if (existing) existingId = existing.id;
+        } else if (data.bookId) {
+            const existing = await prisma.mediaItem.findFirst({
+                where: { userId: session.user.id, bookId: data.bookId },
+            })
+            if (existing) existingId = existing.id;
+        }
+
+        if (existingId) {
+            const updated = await prisma.mediaItem.update({
+                where: { id: existingId },
+                data: { status: data.status },
+            })
+
+            // Log Activity
+            prisma.activity.create({
+                data: {
+                    userId: session.user.id,
+                    type: 'STATUS_CHANGE',
+                    mediaId: updated.id,
+                    content: data.status,
+                }
+            }).catch(e => console.error('[ACTIVITY ERROR]', e))
+
+            return NextResponse.json({ item: updated }, { status: 200 })
+        }
+
+        let finalData = { ...data }
+
+        // Auto-fetch TMDB details if missing (e.g. when added directly from Explore feed)
+        if (finalData.tmdbId && (!finalData.runtime || (finalData.type !== 'MOVIE' && !finalData.episodeCount))) {
+            try {
+                const tmdbType = finalData.type === 'MOVIE' ? 'movie' : 'tv'
+                const res = await fetch(`https://api.themoviedb.org/3/${tmdbType}/${finalData.tmdbId}?api_key=${process.env.TMDB_API_KEY}`)
+                if (res.ok) {
+                    const details = await res.json()
+                    finalData.runtime = finalData.runtime || details.runtime || details.episode_run_time?.[0] || null
+                    if (finalData.type !== 'MOVIE') {
+                        finalData.episodeCount = finalData.episodeCount || details.number_of_episodes || null
+                    }
+                }
+            } catch (err) {
+                console.error('[TMDB Auto-Fetch Error]', err)
             }
         }
 
-        const totalTimeMinutes = calcTotalTime(data)
+        const totalTimeMinutes = calcTotalTime(finalData)
 
         const item = await prisma.mediaItem.create({
             data: {
-                ...data,
+                ...finalData,
                 userId: session.user.id,
                 totalTimeMinutes,
-                genres: data.genres ?? [],
-                // @ts-ignore — rawgId added to schema; Prisma types refresh on next generate
-                rawgId: (data as any).rawgId ?? null,
+                genres: finalData.genres ?? [],
+                rawgId: finalData.rawgId ?? null,
+                bookId: finalData.bookId ?? null,
             },
         })
+
+        // Log Activity
+        prisma.activity.create({
+            data: {
+                userId: session.user.id,
+                type: 'ADDED_MEDIA',
+                mediaId: item.id,
+                content: item.status,
+            }
+        }).catch(e => console.error('[ACTIVITY ERROR]', e))
 
         // Invalidate homepage cache so new items appear immediately
         revalidateTag('landing-data')

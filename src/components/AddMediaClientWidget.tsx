@@ -2,18 +2,18 @@
 
 import { useState } from 'react'
 import { Plus, Loader2 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
+import { StatusIconBar, type Status } from './StatusIconBar'
+import { upsertLibraryStatus } from '@/lib/utils/library'
 
 interface Props {
-    baseItem: any;
+    baseItem: any
+    onAdded?: (addedItem: any) => void
 }
 
-export function AddMediaClientWidget({ baseItem }: Props) {
-    const router = useRouter()
+export function AddMediaClientWidget({ baseItem, onAdded }: Props) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [status, setStatus] = useState('PLANNED')
+    const [status, setStatus] = useState<Status>('PLANNED')
 
     if (!open) {
         return (
@@ -25,55 +25,50 @@ export function AddMediaClientWidget({ baseItem }: Props) {
 
     async function handleSave() {
         setLoading(true)
-        try {
-            const payload = {
+        const result = await upsertLibraryStatus(
+            {
+                id: baseItem.id ?? null,
                 title: baseItem.title,
                 type: baseItem.type,
-                status,
-                tmdbId: baseItem.tmdbId,
-                imdbId: baseItem.imdbId,
-                posterUrl: baseItem.posterUrl,
-                backdropUrl: baseItem.backdropUrl,
-                genres: baseItem.genres,
-                releaseYear: baseItem.releaseYear,
-                overview: baseItem.overview,
-                tmdbRating: baseItem.tmdbRating,
-                runtime: baseItem.runtime,
-                episodeCount: baseItem.episodeCount,
-            }
-
-            const res = await fetch('/api/media', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error)
-            toast.success('Successfully added to your library!')
-            router.refresh() // Refresh the page to show "Already in Library"
-        } catch (e: any) {
-            toast.error(e.message || 'Failed to add')
-        }
+                tmdbId: baseItem.tmdbId ?? null,
+                imdbId: baseItem.imdbId ?? null,
+                rawgId: baseItem.rawgId ?? null,
+                bookId: baseItem.bookId ?? null,
+                posterUrl: baseItem.posterUrl ?? null,
+                backdropUrl: baseItem.backdropUrl ?? null,
+                genres: baseItem.genres ?? [],
+                releaseYear: baseItem.releaseYear ?? null,
+                overview: baseItem.overview ?? null,
+                tmdbRating: baseItem.tmdbRating ?? null,
+                runtime: baseItem.runtime ?? null,
+                episodeCount: baseItem.episodeCount ?? null,
+            },
+            status,
+            status.charAt(0) + status.slice(1).toLowerCase()
+        )
         setLoading(false)
+        if (result) {
+            onAdded?.(result)
+            setOpen(false)
+        }
     }
 
     return (
-        <div className="glass-card p-4 rounded-xl border border-border mt-2 animate-fade-in shadow-card text-left">
-            <h4 className="text-sm font-bold text-text-primary mb-3">Add to Library</h4>
+        <div className="glass-card p-4 rounded-xl border border-border mt-2 animate-fade-in shadow-card text-left space-y-4">
+            <h4 className="text-sm font-bold text-text-primary">Add to Library</h4>
 
-            <label className="block text-xs text-text-secondary mb-1">Status</label>
-            <select value={status} onChange={e => setStatus(e.target.value)} className="input-cyber w-full mb-4">
-                <option value="WATCHING">Watching / Playing</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="PLANNED">Planned</option>
-                <option value="DROPPED">Dropped</option>
-            </select>
+            <div className="space-y-1.5">
+                <label className="block text-[10px] text-text-muted uppercase tracking-wider font-bold">Status</label>
+                <StatusIconBar value={status} onChange={setStatus} />
+            </div>
 
-            <div className="flex gap-3 mt-2">
-                <button onClick={() => setOpen(false)} disabled={loading} className="px-4 py-2 rounded-lg text-sm bg-bg-hover text-text-secondary border border-border flex-1 font-medium hover:bg-bg-card transition-colors">
+            <div className="flex gap-3">
+                <button onClick={() => setOpen(false)} disabled={loading}
+                    className="px-4 py-2 rounded-lg text-sm bg-bg-hover text-text-secondary border border-border flex-1 font-medium hover:bg-bg-card transition-colors">
                     Cancel
                 </button>
-                <button onClick={handleSave} disabled={loading} className="btn-primary py-2 flex-1 flex items-center justify-center gap-2">
+                <button onClick={handleSave} disabled={loading}
+                    className="btn-primary py-2 flex-1 flex items-center justify-center gap-2">
                     {loading ? <Loader2 size={16} className="animate-spin" /> : 'Save'}
                 </button>
             </div>

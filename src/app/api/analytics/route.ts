@@ -16,7 +16,22 @@ export async function GET() {
             totalTimeMinutes: true,
             userRating: true,
             createdAt: true,
+            genres: true,
         },
+    })
+
+    const topGames = await prisma.mediaItem.findMany({
+        where: { userId: session.user.id, type: 'GAME' },
+        orderBy: { totalTimeMinutes: 'desc' },
+        take: 5,
+        select: { id: true, title: true, totalTimeMinutes: true, posterUrl: true },
+    })
+
+    const favoritePeople = await prisma.favoritePerson.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+        select: { id: true, name: true, profileUrl: true, knownForDepartment: true }
     })
 
     // Totals by type
@@ -25,6 +40,7 @@ export async function GET() {
         MOVIE: { count: 0, totalMinutes: 0 },
         TVSHOW: { count: 0, totalMinutes: 0 },
         GAME: { count: 0, totalMinutes: 0 },
+        BOOK: { count: 0, totalMinutes: 0 },
     }
 
     const statusStats: Record<string, number> = {
@@ -32,6 +48,7 @@ export async function GET() {
     }
 
     const yearlyStats: Record<string, number> = {}
+    const genreCounts: Record<string, number> = {}
 
     for (const item of items) {
         typeStats[item.type].count++
@@ -39,7 +56,19 @@ export async function GET() {
         statusStats[item.status]++
         const year = String(new Date(item.createdAt).getFullYear())
         yearlyStats[year] = (yearlyStats[year] ?? 0) + (item.totalTimeMinutes ?? 0)
+
+        // Aggregating genres
+        if (item.genres && Array.isArray(item.genres)) {
+            for (const genre of item.genres) {
+                genreCounts[genre] = (genreCounts[genre] || 0) + 1
+            }
+        }
     }
+
+    const topGenres = Object.entries(genreCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count]) => ({ name, count }))
 
     const totalMinutes = Object.values(typeStats).reduce((a, b) => a + b.totalMinutes, 0)
     const gameMinutes = typeStats.GAME.totalMinutes
@@ -58,5 +87,8 @@ export async function GET() {
         typeStats,
         statusStats,
         yearlyStats,
+        topGenres,
+        favoritePeople,
+        topGames: topGames.filter(g => (g.totalTimeMinutes ?? 0) > 0),
     })
 }

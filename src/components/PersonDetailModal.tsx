@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { X, Star, Film, Tv, Calendar, MapPin, ExternalLink, Loader2, Clapperboard, User as UserIcon, Heart, Plus, Check } from 'lucide-react'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
 
 interface PersonModalProps {
@@ -234,11 +235,18 @@ export function PersonDetailModal({ personId, onClose }: PersonModalProps) {
                                             href={`https://www.imdb.com/name/${data.imdbId}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-1 text-[10px] text-[#f5c518] hover:underline font-bold"
+                                            className="flex items-center gap-1 text-[10px] text-[#f5c518] hover:underline font-bold mr-2"
                                         >
                                             <ExternalLink size={10} /> IMDb
                                         </a>
                                     )}
+                                    <Link
+                                        href={`/person/${data.id}`}
+                                        onClick={() => onClose()}
+                                        className="flex items-center gap-1 text-[10px] text-accent-cyan hover:underline font-bold"
+                                    >
+                                        <ExternalLink size={10} /> View Full Profile
+                                    </Link>
                                 </div>
 
                                 <h2 className="text-2xl font-display font-bold text-[#e8edf5] mb-2">{data.name}</h2>

@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { PersonCard, Person } from '@/components/PersonCard'
 import { PersonDetailModal } from '@/components/PersonDetailModal'
 import { Search, ArrowUpDown, Loader2 } from 'lucide-react'
+import Link from 'next/link'
 
 interface PeopleGridProps {
     people: Person[]
@@ -103,9 +104,9 @@ export function PeopleGrid({ people, favoriteIds, isLoggedIn, children }: People
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-4">
                         {sortedAndFilteredPeople.map((person) => (
                             <div key={person.id} className="relative">
-                                <div onClick={() => setSelectedPersonId(person.id)} className="cursor-pointer h-full">
+                                <Link href={`/person/${person.id}`} className="block h-full cursor-pointer">
                                     <PersonCard person={person} />
-                                </div>
+                                </Link>
                             </div>
                         ))}
                     </div>
